@@ -141,8 +141,14 @@ try {
   for (let attempt = 0; attempt < 50 && references.length < 2; attempt++) await new Promise(resolve => setTimeout(resolve, 100));
   assert.deepEqual(references, ["releases", "releases"], "an unsigned Windows build opens the release page");
   assert.equal(count("install"), installs, "an unsigned Windows build must not start an automatic installation");
+  await publish({ phase: "manual", currentVersion: "0.2.0-rc", latestVersion: "0.2.0", message: "当前 macOS 应用未签名或签名无法验证，请从官方发布页下载安装包，退出 Cage 后替换原应用；配置、凭据、项目和虚拟机磁盘会保留。" });
+  assert.match(await view.getAttribute("title"), /0.2.0.*macOS.*未签名.*官方发布页/);
+  await view.click();
+  for (let attempt = 0; attempt < 50 && references.length < 3; attempt++) await new Promise(resolve => setTimeout(resolve, 100));
+  assert.deepEqual(references, ["releases", "releases", "releases"], "an unsigned macOS build opens the release page");
+  assert.equal(count("install"), installs, "an unsigned macOS build must not start an automatic installation");
   assert.deepEqual(errors, []);
-  const result = { checks: ["automatic startup and periodic checks", "failed background check retry", "latest version hidden", "download before confirmation", "ring and percentage", "indeterminate progress", "manual stop card, cancellation and resume without download", "stop failure blocks install; retry waits for shutdown", "visible failure and retry", "collapsed sidebar", "Linux manual update remains separate", "Linux newer package opens the release page", "unsigned Windows build opens the release page without installation"], calls };
+  const result = { checks: ["automatic startup and periodic checks", "failed background check retry", "latest version hidden", "download before confirmation", "ring and percentage", "indeterminate progress", "manual stop card, cancellation and resume without download", "stop failure blocks install; retry waits for shutdown", "visible failure and retry", "collapsed sidebar", "Linux manual update remains separate", "Linux newer package opens the release page", "unsigned Windows build opens the release page without installation", "unsigned macOS build opens the release page without installation"], calls };
   await fs.writeFile(`${output}/checks.json`, JSON.stringify(result, null, 2));
   console.log(JSON.stringify(result));
 } finally { await browser.close(); }

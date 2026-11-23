@@ -94,7 +94,7 @@ export function useAppUpdates() {
   }, [available, run]);
   useEffect(() => {
     if (!startupFailure) return;
-    const timer = setTimeout(() => setStartupFailure(""), 8000);
+    const timer = setTimeout(() => setStartupFailure(""), 20000);
     return () => clearTimeout(timer);
   }, [startupFailure]);
   return { state, run, available, startupFailure, coolingDown, installationPrompt, setInstallationPrompt };
