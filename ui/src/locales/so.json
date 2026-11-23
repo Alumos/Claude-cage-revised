@@ -3214,5 +3214,11 @@
   "暂无浏览历史": "Weli ma jirto taariikh baaris",
   "在普通标签页访问的网页会显示在这里。": "Bogagga aad ku booqato tababka caadiga ah halkan ayay ka muuqan doonaan.",
   "删除此条历史": "Tirtir taariikhdan",
-  "无痕会话不记录历史": "Kulamada qarsoodiga ah ma keydiyaan taariikhda"
+  "无痕会话不记录历史": "Kulamada qarsoodiga ah ma keydiyaan taariikhda",
+  "环境正在使用麦克风": "Deegaanku wuxuu isticmaalayaa makarafoonka",
+  "麦克风权限未授予，请在系统设置中允许 Cage 使用麦克风后点击重试": "Ogolaanshaha makarafoonka lama siin. U ogolow Cage inuu isticmaalo makarafoonka goobaha nidaamka ka dibna guji si aad mar kale isugu daydo",
+  "未检测到可用的本机麦克风": "Lama helin makarafoon maxalli ah oo diyaar ah",
+  "当前窗口不支持麦克风采集": "Daaqaddani ma taageerto duubista makarafoonka",
+  "本机麦克风已断开，请检查设备后点击重试": "Makarafoonka maxalliga ah wuu go'ay. Hubi qalabka ka dibna guji si aad mar kale isugu daydo",
+  "麦克风采集未能启动，请检查本机音频设备后重试": "Waa la bilaabi waayay duubista makarafoonka. Hubi qalabka codka maxalliga ah oo mar kale isku day"
 }

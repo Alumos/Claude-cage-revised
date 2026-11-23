@@ -3214,5 +3214,11 @@
   "暂无浏览历史": "Aucun historique de navigation",
   "在普通标签页访问的网页会显示在这里。": "Les pages visitées dans les onglets normaux apparaîtront ici.",
   "删除此条历史": "Supprimer cette entrée",
-  "无痕会话不记录历史": "La navigation privée n’enregistre pas l’historique"
+  "无痕会话不记录历史": "La navigation privée n’enregistre pas l’historique",
+  "环境正在使用麦克风": "L'environnement utilise le microphone",
+  "麦克风权限未授予，请在系统设置中允许 Cage 使用麦克风后点击重试": "L'autorisation du microphone n'est pas accordée. Autorisez Cage à utiliser le microphone dans les réglages du système puis cliquez pour réessayer",
+  "未检测到可用的本机麦克风": "Aucun microphone local disponible n'a été détecté",
+  "当前窗口不支持麦克风采集": "Cette fenêtre ne prend pas en charge la capture du microphone",
+  "本机麦克风已断开，请检查设备后点击重试": "Le microphone local a été déconnecté. Vérifiez le périphérique puis cliquez pour réessayer",
+  "麦克风采集未能启动，请检查本机音频设备后重试": "Impossible de démarrer la capture du microphone. Vérifiez le périphérique audio local puis réessayez"
 }
