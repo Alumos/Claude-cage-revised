@@ -93,6 +93,16 @@ enum CageUpdateVersion {
 }
 
 enum CageUpdateFiles {
+    static func parentHasExited(_ parentPID: pid_t) -> Bool {
+        getppid() != parentPID
+    }
+    static func waitForParentExit(_ parentPID: pid_t, timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while !parentHasExited(parentPID) && Date() < deadline {
+            Thread.sleep(forTimeInterval: 0.05)
+        }
+        return parentHasExited(parentPID)
+    }
     static func restore(backup: URL, target: URL, manager: FileManager) throws {
         let copy = backup.deletingLastPathComponent().appendingPathComponent("restore-" + UUID().uuidString + ".app")
         try FileManager.default.copyItem(at: backup, to: copy)
@@ -109,12 +119,13 @@ enum CageUpdateFiles {
             onReplace()
             try verify(target)
         } catch {
+            let detail = error.localizedDescription
             do {
                 if let restoreOriginal { try restoreOriginal() }
                 else { try restore(backup: backup, target: target, manager: manager) }
             }
-            catch { throw CageUpdateError("安装与自动恢复均未完成，原应用备份已保留") }
-            throw CageUpdateError("安装验证失败，已恢复原应用")
+            catch { throw CageUpdateError("安装与自动恢复均未完成，原应用备份已保留：\(detail)") }
+            throw CageUpdateError("安装验证失败，已恢复原应用：\(detail)")
         }
     }
     static func privateDirectory(_ url: URL) throws {
@@ -156,16 +167,24 @@ enum CageUpdateFiles {
         guard process.terminationStatus == 0, data.count <= 1024 * 1024 else { throw CageUpdateError("本机更新验证未完成，请重试") }
         return data
     }
-    static func signingInfo(_ url: URL, bundle: Bool, expectedTeam: String? = nil) throws -> String {
+    static func signingInfo(_ url: URL, bundle: Bool, expectedTeam: String? = nil, currentApp: Bool = false) throws -> String {
         var code: SecStaticCode?
-        guard SecStaticCodeCreateWithPath(url as CFURL, [], &code) == errSecSuccess, let code else { throw CageUpdateError("无法读取应用签名") }
+        guard SecStaticCodeCreateWithPath(url as CFURL, [], &code) == errSecSuccess, let code else {
+            throw CageUpdateError(currentApp ? "无法读取当前应用的 Apple 签名" : "无法读取更新应用的 Apple 签名")
+        }
         var requirement: SecRequirement?
         let identity = bundle ? " and identifier \"\(cageUpdateBundleID)\"" : ""
         let team = expectedTeam.map { " and certificate leaf[subject.OU] = \"\($0)\"" } ?? ""
         let expression = "anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] exists and certificate leaf[field.1.2.840.113635.100.6.1.13] exists\(identity)\(team)"
         guard SecRequirementCreateWithString(expression as CFString, [], &requirement) == errSecSuccess else { throw CageUpdateError("无法建立发布者签名要求") }
         let flags = SecCSFlags(rawValue: kSecCSStrictValidate | kSecCSCheckAllArchitectures | kSecCSCheckNestedCode)
-        guard SecStaticCodeCheckValidity(code, flags, requirement) == errSecSuccess else { throw CageUpdateError("更新应用的 Apple 签名无效或发布者不匹配") }
+        let status = SecStaticCodeCheckValidity(code, flags, requirement)
+        guard status == errSecSuccess else {
+            if currentApp {
+                throw CageUpdateError("当前 macOS 应用没有可验证的 Apple 开发者签名（状态码 \(status)），无法自动安装更新")
+            }
+            throw CageUpdateError("更新应用的 Apple 签名无效或发布者不匹配（\(url.lastPathComponent)，状态码 \(status)）")
+        }
         var information: CFDictionary?
         guard SecCodeCopySigningInformation(code, SecCSFlags(rawValue: kSecCSSigningInformation), &information) == errSecSuccess,
               let info = information as? [String: Any], let actual = info[kSecCodeInfoTeamIdentifier as String] as? String,
@@ -246,13 +265,94 @@ enum CageUpdateFiles {
     }
 }
 
+/// Watches one process ID via kqueue EVFILT_PROC/NOTE_EXIT so background
+/// helpers never rely on cached NSRunningApplication.isTerminated state.
+final class CageUpdateProcessMonitor {
+    private let pid: pid_t
+    private var kq: Int32
+    private var exited: Bool
+
+    init(pid: pid_t) {
+        self.pid = pid
+        let fd = kqueue()
+        self.kq = fd
+        self.exited = false
+        guard fd >= 0 else {
+            self.exited = kill(pid, 0) != 0 && errno == ESRCH
+            return
+        }
+        var change = kevent(
+            ident: UInt(pid),
+            filter: Int16(EVFILT_PROC),
+            flags: UInt16(EV_ADD | EV_ENABLE | EV_ONESHOT),
+            fflags: UInt32(NOTE_EXIT),
+            data: 0,
+            udata: nil
+        )
+        let rc = kevent(fd, &change, 1, nil, 0, nil)
+        if rc < 0 && errno == ESRCH {
+            self.exited = true
+            close(fd)
+            self.kq = -1
+        }
+    }
+
+    deinit {
+        if kq >= 0 { close(kq) }
+    }
+
+    var hasExited: Bool {
+        if exited { return true }
+        if kq < 0 {
+            if kill(pid, 0) != 0 && errno == ESRCH { exited = true }
+            return exited
+        }
+        var event = kevent()
+        var zero = timespec(tv_sec: 0, tv_nsec: 0)
+        let n = kevent(kq, nil, 0, &event, 1, &zero)
+        if n > 0 || (kill(pid, 0) != 0 && errno == ESRCH) {
+            exited = true
+            close(kq)
+            kq = -1
+        }
+        return exited
+    }
+
+    func waitForExit(timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while !hasExited && Date() < deadline {
+            let remaining = deadline.timeIntervalSinceNow
+            if remaining <= 0 { break }
+            if kq >= 0 {
+                let slice = min(remaining, 0.25)
+                let secs = Int(slice)
+                let nsecs = Int((slice - Double(secs)) * 1_000_000_000)
+                var ts = timespec(tv_sec: secs, tv_nsec: max(0, nsecs))
+                var event = kevent()
+                let n = kevent(kq, nil, 0, &event, 1, &ts)
+                if n > 0 {
+                    exited = true
+                    close(kq)
+                    kq = -1
+                    return true
+                }
+            } else {
+                Thread.sleep(forTimeInterval: min(remaining, 0.05))
+            }
+        }
+        return hasExited
+    }
+}
+
 /// Owns update state for one native window. All state transitions run on main.
 final class CageAppUpdater {
+    private static let unsignedManualMessage = "当前 macOS 应用未签名或签名无法验证，请从官方发布页下载安装包，退出 Cage 后替换原应用；配置、凭据、项目和虚拟机磁盘会保留。"
     private let bundleURL: URL
     private let root: URL
     private let onChange: ([String: Any]) -> Void
     private let quit: () -> Void
     private let reconnect: () -> Void
+    private let readTeam: () throws -> String
     private var state: [String: Any]
     private var worker: Process?
     private var validationTask: CageUpdateValidation?
@@ -265,16 +365,20 @@ final class CageAppUpdater {
     private var waitingForTermination = false
     private var installationCommitted = false
 
-    init(bundleURL: URL, onChange: @escaping ([String: Any]) -> Void, quit: @escaping () -> Void, reconnect: @escaping () -> Void) {
-        self.bundleURL = bundleURL.resolvingSymlinksInPath()
+    init(bundleURL: URL, onChange: @escaping ([String: Any]) -> Void, quit: @escaping () -> Void, reconnect: @escaping () -> Void, readTeam: (() throws -> String)? = nil) {
+        let resolved = bundleURL.resolvingSymlinksInPath()
+        self.bundleURL = resolved
         self.onChange = onChange; self.quit = quit; self.reconnect = reconnect
+        self.readTeam = readTeam ?? { try CageUpdateFiles.signingInfo(resolved, bundle: true, currentApp: true) }
         root = CageProfile.configURL().deletingLastPathComponent().appendingPathComponent("updates", isDirectory: true)
         let version = Bundle(url: bundleURL)?.object(forInfoDictionaryKey: "CageVersion") as? String ?? "开发版本"
         state = ["phase": "idle", "currentVersion": version, "message": ""]
-        if let data = try? Data(contentsOf: root.appendingPathComponent("last-result.json")), data.count < 16384,
+        let resultURL = root.appendingPathComponent("last-result.json")
+        if let data = try? Data(contentsOf: resultURL), data.count < 16384,
            let result = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
             state["message"] = result["message"] as? String ?? ""
             if result["success"] as? Bool == false { state["phase"] = "failed"; state["retryable"] = true }
+            try? FileManager.default.removeItem(at: resultURL)
         }
     }
     func handle(_ operation: String) -> [String: Any] {
@@ -359,34 +463,48 @@ final class CageAppUpdater {
     private func startDownload(checkOnly: Bool) {
         generation += 1; let operation = generation
         change(["phase": "checking", "message": "正在检查更新，优先使用主机网络", "receivedBytes": 0, "totalBytes": 0, "retryable": false, "retryAt": ""])
-        let process = Process(); process.executableURL = cage; process.arguments = ["app-update", checkOnly ? "check" : "download"]
-        let pipe = Pipe(); process.standardOutput = pipe; process.standardError = FileHandle.nullDevice
-        worker = process
-        do { try process.run() } catch { worker = nil; failure("无法启动更新检查，请确认应用组件完整"); return }
+        // An unsigned or source-built App cannot authenticate an automatic
+        // replacement. Still check for releases, but never download one.
         DispatchQueue.global(qos: .utility).async {
-            var pending = Data(); var last: [String: Any]?
-            while true {
-                let chunk = pipe.fileHandleForReading.availableData
-                if chunk.isEmpty { break }
-                pending.append(chunk)
-                if pending.count > 65536 { process.terminate(); break }
-                while let end = pending.firstIndex(of: 10) {
-                    let line = pending.prefix(upTo: end); pending.removeSubrange(...end)
-                    guard let value = try? JSONSerialization.jsonObject(with: line) as? [String: Any] else { continue }
-                    last = value
-                    var visible = value; visible.removeValue(forKey: "archivePath"); visible.removeValue(forKey: "sha256")
-                    DispatchQueue.main.async { if self.generation == operation { self.change(visible) } }
-                }
-            }
-            process.waitUntilExit()
-            let result = last
+            let team = try? self.readTeam()
             DispatchQueue.main.async {
-                if self.worker === process { self.worker = nil }
-                guard self.generation == operation else { return }
-                if process.terminationStatus != 0 {
-                    self.failure(result?["message"] as? String ?? "更新请求未完成，请重试", retryAt: result?["retryAt"] as? String ?? "")
-                } else if !checkOnly, let result, result["phase"] as? String == "downloaded" {
-                    self.verifyDownload(result, operation: operation)
+                guard self.generation == operation, !self.waitingForTermination else { return }
+                let process = Process(); process.executableURL = self.cage; process.arguments = ["app-update", checkOnly || team == nil ? "check" : "download"]
+                let pipe = Pipe(); process.standardOutput = pipe; process.standardError = FileHandle.nullDevice
+                self.worker = process
+                do { try process.run() } catch { self.worker = nil; self.failure("无法启动更新检查，请确认应用组件完整"); return }
+                DispatchQueue.global(qos: .utility).async {
+                    var pending = Data(); var last: [String: Any]?
+                    while true {
+                        let chunk = pipe.fileHandleForReading.availableData
+                        if chunk.isEmpty { break }
+                        pending.append(chunk)
+                        if pending.count > 65536 { process.terminate(); break }
+                        while let end = pending.firstIndex(of: 10) {
+                            let line = pending.prefix(upTo: end); pending.removeSubrange(...end)
+                            guard let value = try? JSONSerialization.jsonObject(with: line) as? [String: Any] else { continue }
+                            last = value
+                            var visible = value; visible.removeValue(forKey: "archivePath"); visible.removeValue(forKey: "sha256")
+                            if team == nil && visible["phase"] as? String == "available" {
+                                visible["phase"] = "manual"
+                                visible["message"] = Self.unsignedManualMessage
+                                visible["retryable"] = false
+                                visible["retryAt"] = ""
+                            }
+                            DispatchQueue.main.async { if self.generation == operation { self.change(visible) } }
+                        }
+                    }
+                    process.waitUntilExit()
+                    let result = last
+                    DispatchQueue.main.async {
+                        if self.worker === process { self.worker = nil }
+                        guard self.generation == operation else { return }
+                        if process.terminationStatus != 0 {
+                            self.failure(result?["message"] as? String ?? "更新请求未完成，请重试", retryAt: result?["retryAt"] as? String ?? "")
+                        } else if !checkOnly, team != nil, let result, result["phase"] as? String == "downloaded" {
+                            self.verifyDownload(result, operation: operation)
+                        }
+                    }
                 }
             }
         }
@@ -407,7 +525,18 @@ final class CageAppUpdater {
             let directory = self.root.appendingPathComponent("verified-" + UUID().uuidString, isDirectory: true)
             do {
                 try task.checkCancellation()
-                let team = try CageUpdateFiles.signingInfo(self.bundleURL, bundle: true)
+                let team: String
+                do {
+                    team = try self.readTeam()
+                } catch {
+                    try? FileManager.default.removeItem(at: archive.deletingLastPathComponent())
+                    DispatchQueue.main.async {
+                        if self.generation == operation {
+                            self.change(["phase": "manual", "message": Self.unsignedManualMessage, "retryable": false, "retryAt": ""])
+                        }
+                    }
+                    return
+                }
                 try CageUpdateFiles.privateDirectory(directory)
                 let app = try CageUpdateFiles.extract(archive: archive, hash: hash, version: version, team: team, directory: directory, validation: task)
                 try task.checkCancellation()

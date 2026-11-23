@@ -74,7 +74,7 @@ internal sealed class MainWindow : Form
             if (!ambiguous && target != null && target.Value.TerminalID.Length > 0)
                 Script("window.dispatchEvent(new CustomEvent('cage-notification-click',{detail:" + JsonSerializer.Serialize(new { terminal_id = target.Value.TerminalID, connection_id = target.Value.ConnectionID }) + "}));");
         };
-        updater = new AppUpdater(PublishUpdate, () => { allowQuit = true; Close(); }, () => _ = Bootstrap());
+        updater = new AppUpdater(PublishUpdate, () => { allowQuit = true; Close(); }, () => _ = Bootstrap(), report: message => _ = Backend.Report(message));
         Shown += async (_, _) => {
             if (Program.SmokeOutput != null) _ = SmokeDeadline();
             await Initialize();

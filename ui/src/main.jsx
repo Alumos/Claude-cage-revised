@@ -1885,13 +1885,13 @@ function App() {
               systemClipboard={browser.capabilities?.systemClipboard !== false}
               uploads={desktopFiles.uploads}
               status={status}
-              onProjectOpened={() => refreshStatus.current?.()}
+              onProjectOpened={async () => { await refreshSettings(); await refreshStatus.current?.(); }}
               onStatus={notify}
               onFallback={(text, message) => setTransfer({ text, message })}
             />}
             {!storageRecovery && desktopOpen && !accountDesktops.panes.length && <ClaudeDesktop
               uploads={desktopFiles.uploads}
-              onProjectOpened={() => refreshStatus.current?.()}
+              onProjectOpened={async () => { await refreshSettings(); await refreshStatus.current?.(); }}
               status={status} visible={!settingsOpen && !managementPage} remoteRef={remote}
               onStatus={notify} onFallback={(text, message) => setTransfer({ text, message })}
               onConfirm={confirm} onDetails={() => setDetails(true)}
@@ -2240,6 +2240,7 @@ function App() {
         <SettingsPanel
           current={settings}
           status={status}
+          workspace={workspace}
           initialSection={settingsSection}
           onClose={() => setSettingsOpen(false)}
           onSaved={refreshSettings}

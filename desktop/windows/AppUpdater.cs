@@ -13,15 +13,17 @@ internal sealed class AppUpdater : IDisposable
     private readonly Action<Dictionary<string, object?>> changed;
     private readonly Action quit, reconnect;
     private readonly Func<string> readPublisher;
+    private readonly Action<string>? report;
     private readonly Dictionary<string, object?> state = new() { ["phase"] = "idle", ["currentVersion"] = Version, ["message"] = "" };
     private CancellationTokenSource? cancellation;
     private InstallPlan? prepared;
     private bool committed;
 
-    public AppUpdater(Action<Dictionary<string, object?>> changed, Action quit, Action reconnect, Func<string>? readPublisher = null)
+    public AppUpdater(Action<Dictionary<string, object?>> changed, Action quit, Action reconnect, Func<string>? readPublisher = null, Action<string>? report = null)
     {
         this.changed = changed; this.quit = quit; this.reconnect = reconnect;
-        this.readPublisher = readPublisher ?? (() => Authenticode.Publisher(Environment.ProcessPath!));
+        this.readPublisher = readPublisher ?? Authenticode.OwnPublisher;
+        this.report = report;
         try
         {
             var result = Path.Combine(Root, "last-result.json");
@@ -30,6 +32,7 @@ internal sealed class AppUpdater : IDisposable
                 var value = JsonDocument.Parse(File.ReadAllText(result)).RootElement;
                 state["message"] = value.Text("message");
                 if (value.TryGetProperty("success", out var success) && !success.GetBoolean()) { state["phase"] = "failed"; state["retryable"] = true; }
+                try { File.Delete(result); } catch (IOException) { } catch (UnauthorizedAccessException) { }
             }
         }
         catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException) { }
@@ -96,7 +99,10 @@ internal sealed class AppUpdater : IDisposable
             // replacement. Still check for releases, but never download one.
             string? publisher = null;
             try { publisher = await Task.Run(readPublisher, token); }
-            catch (Exception error) when (error is IOException or CryptographicException or UnauthorizedAccessException) { }
+            catch (Exception error) when (error is IOException or CryptographicException or UnauthorizedAccessException)
+            {
+                report?.Invoke("Windows publisher check failed: " + error.Message);
+            }
             token.ThrowIfCancellationRequested();
             process.StartInfo = Backend.StartInfo(Backend.Executable, "app-update", checkOnly || publisher == null ? "check" : "download");
             if (!process.Start()) throw new IOException("无法启动更新检查");

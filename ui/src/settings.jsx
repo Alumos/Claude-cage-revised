@@ -64,12 +64,14 @@ const sectionGroups = [
 export function SettingsPanel({
   current,
   status,
+  workspace = "",
   onClose,
   onSaved,
   onConfirm,
   initialSection = "keyboard",
 }) {
   const tr = useTranslation();
+  const activeWorkspace = workspace || status?.workspace || current.workspace || status?.projects?.[0] || "";
   const [localKeyboard, setLocalKeyboard] = useState(() => clientKeyboard(current.keyboard));
   const [accountDirty, setAccountDirty] = useState(false);
   const [proxyDirty, setProxyDirty] = useState(false);
@@ -716,8 +718,8 @@ export function SettingsPanel({
                   <div className="settings-row">
                     <div className="settings-row-copy">
                       <strong>{tr("当前项目")}</strong>
-                      <small className="settings-mono-path" title={current.workspace}>
-                        {current.workspace || tr("尚未选择项目")}
+                      <small className="settings-mono-path" title={activeWorkspace}>
+                        {activeWorkspace || tr("尚未选择项目")}
                       </small>
                     </div>
                     <FolderOpen size={18} className="settings-row-icon" />

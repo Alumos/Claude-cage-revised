@@ -134,6 +134,16 @@ func (s *Server) prepareEnvironment() error {
 			p.Workspace = ""
 		}
 	}
+	if p.Workspace == "" {
+		if saved, err := s.readSharedProjects(); err == nil {
+			for _, candidate := range saved.Paths {
+				if valid, err := validateWorkspace(candidate, s.profile); err == nil {
+					p.Workspace = valid
+					break
+				}
+			}
+		}
+	}
 	if err := writePrivate(filepath.Join(s.profile, "workbench.json"), p); err != nil {
 		return err
 	}

@@ -47,7 +47,7 @@ internal static class UpdateInstaller
             if (File.ReadAllText(Path.Combine(plan.Target, "Cage.install-id")).Trim() != "io.github.lee-xeo.claude-cage")
                 throw new IOException("请先使用 Cage 安装程序安装应用，再自动更新");
             var original = Path.Combine(plan.Target, "Cage.exe");
-            var ownPublisher = Authenticode.Publisher(Environment.ProcessPath!);
+            var ownPublisher = Authenticode.OwnPublisher();
             if (plan.Publisher != ownPublisher) throw new IOException("安装计划发布者不匹配");
             Authenticode.SamePublisher(original, ownPublisher);
             if (!UpdatePolicy.IsNewer(plan.Version, FileVersionInfo.GetVersionInfo(original).ProductVersion ?? ""))
