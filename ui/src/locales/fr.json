@@ -3239,5 +3239,11 @@
   "环境内存不足，{0} 已被系统关闭。请在设置中检查计算资源后重新打开。": "Mémoire de l'environnement insuffisante : le système a fermé {0}. Vérifiez les ressources de calcul dans les réglages, puis rouvrez-la.",
   "请先保存应用内的工作。更新会关闭应用，安装官方最新版本后重新打开；登录与设置继续保留。": "Enregistrez d'abord votre travail dans l'application. La mise à jour ferme l'application, installe la dernière version officielle puis la rouvre ; connexion et réglages sont conservés.",
   "请先保存应用内的工作。浏览器和终端会继续运行。": "Enregistrez d'abord votre travail dans l'application. Le navigateur et les terminaux continuent de fonctionner.",
-  "桌面应用": "Application de bureau"
+  "桌面应用": "Application de bureau",
+  "拖动以移动位置，双击复位": "Glisser pour déplacer, double-cliquer pour réinitialiser la position",
+  "展开浮窗": "Déplier la fenêtre flottante",
+  "收起浮窗": "Replier la fenêtre flottante",
+  "浮窗「{0}」": "Fenêtre flottante « {0} »",
+  "在工作台上打开一个可拖动的半透明浮窗。浮窗在隔离的框架中运行，只能使用这个插件自己的工具。它可以在内置浏览器中打开：{0}。": "Ouvre une fenêtre flottante translucide déplaçable au-dessus de l'espace de travail. Elle s'exécute dans un cadre isolé, n'utilise que les outils de ce plugin et peut ouvrir dans le navigateur intégré : {0}.",
+  "在工作台上打开一个可拖动的半透明浮窗。浮窗在隔离的框架中运行，只能使用这个插件自己的工具。它不能打开网页。": "Ouvre une fenêtre flottante translucide déplaçable au-dessus de l'espace de travail. Elle s'exécute dans un cadre isolé, n'utilise que les outils de ce plugin et ne peut pas ouvrir de pages web."
 }

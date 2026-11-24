@@ -3239,5 +3239,11 @@
   "环境内存不足，{0} 已被系统关闭。请在设置中检查计算资源后重新打开。": "Xusuusta deegaanka ayaa ku filnaan weysay, nidaamkuna wuu xidhay {0}. Ka hubi kheyraadka xisaabinta dejinta, kadibna dib u fur.",
   "请先保存应用内的工作。更新会关闭应用，安装官方最新版本后重新打开；登录与设置继续保留。": "Marka hore keydi shaqadaada abka. Cusbooneysiintu waxay xidhaysaa abka, rakibaysaa noocii rasmiga ahaa ee ugu dambeeyay, kadibna dib u furaysaa; gelitaanka iyo dejintu way hadhayaan.",
   "请先保存应用内的工作。浏览器和终端会继续运行。": "Marka hore keydi shaqadaada abka. Biraawsarka iyo terminaalladu way sii shaqaynayaan.",
-  "桌面应用": "Abka desktop-ka"
+  "桌面应用": "Abka desktop-ka",
+  "拖动以移动位置，双击复位": "Jiid si aad u dhaqaajiso, laba jeer guji si aad booska ugu celiso",
+  "展开浮窗": "Ballaari daaqadda sabbeysa",
+  "收起浮窗": "Laab daaqadda sabbeysa",
+  "浮窗「{0}」": "Daaqadda sabbeysa \"{0}\"",
+  "在工作台上打开一个可拖动的半透明浮窗。浮窗在隔离的框架中运行，只能使用这个插件自己的工具。它可以在内置浏览器中打开：{0}。": "Waxay goobta shaqada dusheeda ka furtaa daaqad sabbeysa oo nus-muuqata oo la jiidi karo. Waxay ku shaqaysaa qaab gooni ah, waxay isticmaashaa qalabka plugin-kan oo keliya, waxayna biraawsarka gudaha ka furi kartaa: {0}.",
+  "在工作台上打开一个可拖动的半透明浮窗。浮窗在隔离的框架中运行，只能使用这个插件自己的工具。它不能打开网页。": "Waxay goobta shaqada dusheeda ka furtaa daaqad sabbeysa oo nus-muuqata oo la jiidi karo. Waxay ku shaqaysaa qaab gooni ah, waxay isticmaashaa qalabka plugin-kan oo keliya, mana furi karto bogag internet."
 }
