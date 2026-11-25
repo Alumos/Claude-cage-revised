@@ -1577,6 +1577,11 @@ function App() {
     setProjectDialog(null);
     setHome(true);
   };
+  const savedProject = async () => {
+    await refreshSettings();
+    await refreshStatus.current?.();
+    setProjectDialog(null);
+  };
   useEffect(() => {
     if (status?.workspace) setSelectedProject(status.workspace);
   }, [status?.workspace]);
@@ -2375,6 +2380,7 @@ function App() {
           onClose={() => setProjectDialog(null)}
           onSettings={() => { setProjectDialog(null); openSettings("project"); }}
           onOpened={openedProject}
+          onSaved={savedProject}
           onRemoved={async (removed, workspace) => {
             const members = groups.find(group => group.workspace === removed)?.folders || [removed];
             const currentPins = savedProjectPins[tabLayoutKey] || [];
