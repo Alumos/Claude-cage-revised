@@ -575,6 +575,18 @@ func parseAnyTLSLink(line string) (map[string]any, error) {
 	}
 	q := u.Query()
 	p["password"] = password
+	switch q.Get("security") {
+	case "", "tls":
+	case "reality":
+		if q.Get("pbk") == "" {
+			return nil, errors.New("AnyTLS Reality 分享链接缺少公钥")
+		}
+		opts := map[string]any{"public-key": q.Get("pbk")}
+		setString(opts, "short-id", q.Get("sid"))
+		p["reality-opts"] = opts
+	default:
+		return nil, errors.New("AnyTLS 分享链接的安全层暂不支持；请改用 Clash/Mihomo YAML")
+	}
 	setString(p, "sni", q.Get("sni"))
 	setString(p, "client-fingerprint", q.Get("fp"))
 	if alpn := commaList(q.Get("alpn")); len(alpn) > 0 {

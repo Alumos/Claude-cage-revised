@@ -1,0 +1,241 @@
+name: Build multi-platform packages (MeowX core)
+on:
+  push:
+    tags:
+      - 'revised-*'
+  workflow_dispatch:
+    inputs:
+      build_macos_arm64:
+        description: Build macOS Apple Silicon (.dmg)
+        type: boolean
+        default: true
+      build_macos_amd64:
+        description: Build macOS Intel (.dmg)
+        type: boolean
+        default: true
+      build_linux_amd64:
+        description: Build Linux amd64 (.deb)
+        type: boolean
+        default: true
+      build_windows_amd64:
+        description: Build Windows amd64 (.exe)
+        type: boolean
+        default: true
+      publish_release:
+        description: Publish a GitHub Release with all built packages
+        type: boolean
+        default: false
+      release_tag:
+        description: Optional release tag (defaults to revised-v<VERSION>-<short-sha>)
+        type: string
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: revised-packages-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Verify core pin, script syntax and release contracts
+        run: |
+          node scripts/check-repository-files.mjs
+          node scripts/check-script-syntax.mjs
+          node scripts/check-version.mjs
+          node --test scripts/build-meowx-core.test.mjs scripts/prepare-release-assets.test.mjs scripts/release-control.test.mjs scripts/fetch-build-artifact.test.mjs
+
+  macos-arm64:
+    needs: preflight
+    if: ${{ github.event_name == 'push' || inputs.build_macos_arm64 }}
+    uses: ./.github/workflows/macos-build.yml
+    with:
+      ref: ${{ github.sha }}
+      release: false
+      artifact_name: revised-macos-arm64
+
+  macos-amd64:
+    needs: preflight
+    if: ${{ github.event_name == 'push' || inputs.build_macos_amd64 }}
+    uses: ./.github/workflows/macos-intel-build.yml
+    with:
+      ref: ${{ github.sha }}
+      release: false
+      artifact_name: revised-macos-amd64
+
+  linux-amd64:
+    needs: preflight
+    if: ${{ github.event_name == 'push' || inputs.build_linux_amd64 }}
+    uses: ./.github/workflows/linux-build.yml
+    with:
+      ref: ${{ github.sha }}
+      release: false
+      artifact_name: revised-linux-amd64
+
+  windows-amd64:
+    needs: preflight
+    if: ${{ github.event_name == 'push' || inputs.build_windows_amd64 }}
+    uses: ./.github/workflows/windows-build.yml
+    with:
+      ref: ${{ github.sha }}
+      release: false
+      artifact_name: revised-windows-amd64
+      all_windows_versions: false
+
+  assemble:
+    needs:
+      - preflight
+      - macos-arm64
+      - macos-amd64
+      - linux-amd64
+      - windows-amd64
+    if: >-
+      ${{ always() &&
+          needs.preflight.result == 'success' &&
+          (needs.macos-arm64.result == 'success' || needs.macos-arm64.result == 'skipped') &&
+          (needs.macos-amd64.result == 'success' || needs.macos-amd64.result == 'skipped') &&
+          (needs.linux-amd64.result == 'success' || needs.linux-amd64.result == 'skipped') &&
+          (needs.windows-amd64.result == 'success' || needs.windows-amd64.result == 'skipped') &&
+          (needs.macos-arm64.result == 'success' || needs.macos-amd64.result == 'success' || needs.linux-amd64.result == 'success' || needs.windows-amd64.result == 'success') }}
+    runs-on: macos-15
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      actions: read
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Download built platform artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: _output/revised-inputs
+      - name: Package macOS DMGs and assemble multi-platform bundle
+        run: |
+          set -euo pipefail
+          version="$(tr -d '\r\n' < VERSION)"
+          core_version="$(sed -n 's/^version=//p' scripts/fetch-proxy-core.sh)"
+          out="$PWD/_output/revised-release"
+          mkdir -p "$out"
+
+          for arch in arm64 amd64; do
+            dir="$PWD/_output/revised-inputs/revised-macos-$arch"
+            if [[ ! -d "$dir" ]]; then
+              continue
+            fi
+            tarball="$(find "$dir" -type f -name "Cage-$version-macos-$arch-test.tar.gz" -print -quit)"
+            if [[ -z "$tarball" ]]; then
+              echo "Missing macOS $arch tarball in $dir" >&2
+              exit 1
+            fi
+            stage="$(mktemp -d "$RUNNER_TEMP/revised-dmg-$arch.XXXXXX")"
+            tar -xzf "$tarball" -C "$stage"
+            codesign --verify --deep --strict "$stage/Cage.app"
+            if [[ "$arch" == arm64 ]]; then
+              "$stage/Cage.app/Contents/Resources/mihomo" -v
+            fi
+            ln -s /Applications "$stage/Applications"
+            cat > "$stage/安装说明 - Read Me.txt" <<EOF
+          Cage $version (MeowX core $core_version, ad-hoc build)
+
+          1. 将 Cage.app 拖入 Applications（应用程序）。
+          2. 首次启动（未公证构建）如提示无法验证开发者，请在终端执行：
+             xattr -dr com.apple.quarantine /Applications/Cage.app
+          3. 打开 Cage 并导入 Clash/Mihomo/MeowX 订阅或分享链接。
+          EOF
+            hdiutil create -volname Cage -srcfolder "$stage" -ov -format UDZO "$out/Cage-$version-macos-$arch-adhoc.dmg"
+            rm -rf "$stage"
+          done
+
+          if [[ -d "$PWD/_output/revised-inputs/revised-linux-amd64" ]]; then
+            linux_deb="$(find "$PWD/_output/revised-inputs/revised-linux-amd64" -type f -name "Cage-$version-linux-amd64.deb" -print -quit)"
+            if [[ -n "$linux_deb" ]]; then
+              cp "$linux_deb" "$out/"
+            fi
+          fi
+
+          if [[ -d "$PWD/_output/revised-inputs/revised-windows-amd64-windows-2025" ]]; then
+            win_exe="$(find "$PWD/_output/revised-inputs/revised-windows-amd64-windows-2025" -type f -name "Cage-$version-windows-amd64-setup-unsigned.exe" -print -quit)"
+            if [[ -n "$win_exe" ]]; then
+              cp "$win_exe" "$out/"
+            fi
+          fi
+
+          node scripts/build-meowx-core.mjs --prefetch-source-only --cache-dir "$out"
+          (
+            cd "$out"
+            shopt -s nullglob
+            files=(Cage-* mihomo-*-source.tar.gz)
+            if [[ "${#files[@]}" -eq 0 ]]; then
+              echo 'No package files assembled.' >&2
+              exit 1
+            fi
+            shasum -a 256 "${files[@]}" > SHA256SUMS
+            cat SHA256SUMS
+          )
+      - name: Upload unified multi-platform packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: claude-cage-revised-packages
+          path: _output/revised-release/
+          if-no-files-found: error
+          overwrite: true
+          compression-level: 0
+          retention-days: 30
+      - name: Publish GitHub Release
+        if: ${{ (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/revised-')) || inputs.publish_release }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_TAG: ${{ inputs.release_tag }}
+          BUILD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          version="$(tr -d '\r\n' < VERSION)"
+          core_version="$(sed -n 's/^version=//p' scripts/fetch-proxy-core.sh)"
+          if [[ "$EVENT_NAME" == push ]]; then
+            tag="$REF_NAME"
+          elif [[ -n "$INPUT_TAG" ]]; then
+            tag="$INPUT_TAG"
+          else
+            tag="revised-v${version}-${BUILD_SHA:0:7}"
+          fi
+          shopt -s nullglob
+          assets=(_output/revised-release/*)
+          if [[ "${#assets[@]}" -eq 0 ]]; then
+            echo 'No release assets found to publish.' >&2
+            exit 1
+          fi
+          notes="Claude Cage ${version} built with MeowX core ${core_version} (commit ${BUILD_SHA:0:7})."
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" "${assets[@]}" --clobber
+          elif [[ "$EVENT_NAME" == push ]]; then
+            gh release create "$tag" "${assets[@]}" \
+              --prerelease \
+              --title "Claude Cage Revised ($tag)" \
+              --notes "$notes"
+          else
+            gh release create "$tag" "${assets[@]}" \
+              --target "$BUILD_SHA" \
+              --prerelease \
+              --title "Claude Cage Revised ($tag)" \
+              --notes "$notes"
+          fi

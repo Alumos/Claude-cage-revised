@@ -3,19 +3,11 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 directory="$PWD/_output/linux-deps"
 mkdir -p "$directory"
-for component in mihomo mihomoSource; do
-  metadata=$(node -e 'const d=JSON.parse(require("fs").readFileSync("packaging/linux/dependencies.json"))[process.argv[1]]; console.log([d.file,d.url,d.sha256].join("\t"))' "$component")
-  IFS=$'\t' read -r file url checksum <<< "$metadata"
-  archive="$directory/$file"
-  node scripts/fetch-build-artifact.mjs "$url" "$checksum" "$archive"
-done
-gzip -dc "$directory/mihomo-linux-amd64-compatible-v1.19.33.gz" > "$directory/mihomo.part"
-chmod 755 "$directory/mihomo.part"
-mv "$directory/mihomo.part" "$directory/mihomo"
-tar -xOf "$directory/mihomo-v1.19.33-source.tar.gz" mihomo-1.19.33/LICENSE > "$directory/LICENSE"
-cat > "$directory/NOTICE" <<'EOF'
-Mihomo v1.19.33, unmodified executable distributed under GPL-3.0.
-Source: https://github.com/MetaCubeX/mihomo/tree/v1.19.33
-Corresponding source accompanies the Cage Linux release as mihomo-v1.19.33-source.tar.gz.
-Binary checksum and download URL: packaging/linux/dependencies.json in Cage sources.
-EOF
+core_archive=$(node -e 'console.log(JSON.parse(require("fs").readFileSync("packaging/linux/dependencies.json","utf8")).mihomo.file)')
+node scripts/build-meowx-core.mjs \
+  --os linux \
+  --arch amd64 \
+  --out "$directory/mihomo" \
+  --gzip "$directory/$core_archive" \
+  --cache-dir "$directory" \
+  --license-dir "$directory"

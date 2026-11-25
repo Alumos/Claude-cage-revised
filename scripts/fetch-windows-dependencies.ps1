@@ -7,7 +7,7 @@ param([string]$DependencyCache)
 $repository = Split-Path $PSScriptRoot -Parent
 if (-not $DependencyCache) { $DependencyCache = Join-Path $repository '_output/windows-deps' }
 $dependencies = Get-Content (Join-Path $repository 'packaging/windows/dependencies.json') -Raw | ConvertFrom-Json
-foreach ($name in @('mihomo', 'mihomoSource', 'openssh', 'qemu', 'webview2', 'qemuKeycodemap')) {
+foreach ($name in @('mihomoSource', 'openssh', 'qemu', 'webview2', 'qemuKeycodemap')) {
     $path = Get-VerifiedDependency $dependencies.$name $DependencyCache
     Write-Host "Verified $name at $path"
 }
@@ -16,5 +16,13 @@ foreach ($wheel in $dependencies.qemuPythonWheels) {
     Write-Host "Verified QEMU build wheel $($wheel.name) at $path"
 }
 Push-Location $repository
-try { Invoke-BuildTool (Get-BuildCommand @('node.exe', 'node')) @('scripts/bundle-cloud-kit.mjs', '--prefetch') }
-finally { Pop-Location }
+try {
+    $node = Get-BuildCommand @('node.exe', 'node')
+    Invoke-BuildTool $node @('scripts/bundle-cloud-kit.mjs', '--prefetch')
+    Invoke-BuildTool $node @(
+        'scripts/build-meowx-core.mjs',
+        '--os', 'windows', '--arch', 'amd64',
+        '--out', (Join-Path $DependencyCache $dependencies.mihomo.file),
+        '--cache-dir', $DependencyCache
+    )
+} finally { Pop-Location }

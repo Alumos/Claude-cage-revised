@@ -128,12 +128,14 @@ try {
         '-p:EnableWindowsTargeting=true', '-p:PublishSingleFile=true', '-p:RestoreLockedMode=true', "-p:Version=$version", "-p:InformationalVersion=$version", '-o', $app)
     Get-ChildItem -LiteralPath $app -File | Where-Object { $_.Extension -in @('.pdb', '.xml') } | Remove-Item -Force
     Invoke-BuildTool $node @('scripts/bundle-cloud-kit.mjs', $resources)
-    $coreArchive = Get-VerifiedDependency $dependencies.mihomo $DependencyCache
-    $core = Join-Path $stage 'mihomo'
-    Expand-BuildArchive $coreArchive $core $sevenZip
-    $coreExe = @(Get-ChildItem -LiteralPath $core -Filter '*.exe' -Recurse)
-    if ($coreExe.Count -ne 1) { throw 'Unexpected Mihomo archive layout.' }
-    Copy-Item -LiteralPath $coreExe[0].FullName -Destination (Join-Path $resources 'mihomo.exe')
+    $coreNotices = Join-Path $resources 'licenses/mihomo'
+    Invoke-BuildTool $node @(
+        'scripts/build-meowx-core.mjs',
+        '--os', 'windows', '--arch', 'amd64',
+        '--out', (Join-Path $resources 'mihomo.exe'),
+        '--cache-dir', $DependencyCache,
+        '--license-dir', $coreNotices
+    )
     $sshArchive = Get-VerifiedDependency $dependencies.openssh $DependencyCache
     $ssh = Join-Path $stage 'openssh'
     Expand-BuildArchive $sshArchive $ssh $sevenZip
@@ -168,18 +170,12 @@ try {
     $webviewArchive = Get-VerifiedDependency $dependencies.webview2 $DependencyCache
     Copy-Item -LiteralPath $webviewArchive -Destination (Join-Path $resources 'runtime/MicrosoftEdgeWebView2RuntimeInstallerX64.exe')
     Invoke-BuildTool $node @('scripts/collect-app-licenses.mjs', (Join-Path $resources 'licenses'))
-    $coreSourceArchive = Get-VerifiedDependency $dependencies.mihomoSource $DependencyCache
-    $coreSource = Join-Path $stage 'mihomo-source'
-    Expand-BuildArchive $coreSourceArchive $coreSource $sevenZip
-    $coreTar = @(Get-ChildItem -LiteralPath $coreSource -Filter '*.tar')
-    if ($coreTar.Count -ne 1) { throw 'Unexpected Mihomo source archive layout.' }
-    Expand-BuildArchive $coreTar[0].FullName $coreSource $sevenZip
-    $coreLicense = Join-Path $coreSource ("mihomo-" + $dependencies.mihomo.version.TrimStart('v') + '/LICENSE')
-    if (-not (Test-Path -LiteralPath $coreLicense -PathType Leaf)) { throw 'Mihomo source license is missing.' }
-    $coreNotices = Join-Path $resources 'licenses/mihomo'
-    New-Item -ItemType Directory -Path $coreNotices -Force | Out-Null
-    Copy-Item -LiteralPath $coreLicense -Destination (Join-Path $coreNotices 'LICENSE')
-    [IO.File]::WriteAllText((Join-Path $coreNotices 'NOTICE'), "Mihomo $($dependencies.mihomo.version), unmodified separate executable.`nSource: $($dependencies.mihomo.source)`nLicense: GPL-3.0; corresponding source accompanies the installer.`n")
+    $null = Get-VerifiedDependency $dependencies.mihomoSource $DependencyCache
+    foreach ($noticeFile in @('LICENSE', 'NOTICE')) {
+        if (-not (Test-Path -LiteralPath (Join-Path $coreNotices $noticeFile) -PathType Leaf)) {
+            throw "Mihomo license file is missing: $noticeFile"
+        }
+    }
     # Runtime packs and WebView2 are absent from the frontend license collector.
     $resolvedAssets = Get-Content -LiteralPath 'desktop/windows/obj/project.assets.json' -Raw | ConvertFrom-Json
     $nuget = @($resolvedAssets.packageFolders.PSObject.Properties.Name)[0]

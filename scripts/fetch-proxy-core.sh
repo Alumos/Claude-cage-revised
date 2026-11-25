@@ -1,30 +1,24 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
-version=v1.19.33
+version=v0.5.4
 case "${CAGE_CORE_ARCH:-$(uname -m)}" in
-  arm64) asset="mihomo-darwin-arm64-$version.gz"; checksum=060b64b0f2c9a310831db0fe4adb2878de67bfa606c311813c1f13966aa504b6 ;;
-  x86_64|amd64) asset="mihomo-darwin-amd64-compatible-$version.gz"; checksum=eefe967b74312f70b64efa0dfa54929d00c7af8e94416e1b12df09863a40f35b ;;
+  arm64) arch=arm64 ;;
+  x86_64|amd64) arch=amd64 ;;
   *) echo 'Unsupported Cage proxy-core architecture' >&2; exit 1 ;;
 esac
 directory=_output/proxy-core
 mkdir -p "$directory"
-archive="$directory/$asset"
-node scripts/fetch-build-artifact.mjs "https://github.com/MetaCubeX/mihomo/releases/download/$version/$asset" "$checksum" "$archive"
-gzip -dc "$archive" > "$directory/mihomo.part"
-chmod 755 "$directory/mihomo.part"
-mv "$directory/mihomo.part" "$directory/mihomo"
-if [[ ! -f "$directory/LICENSE" ]]; then
-  curl --fail --location --retry 2 --connect-timeout 15 --max-time 60 "https://raw.githubusercontent.com/MetaCubeX/mihomo/$version/LICENSE" -o "$directory/LICENSE.part"
-  mv "$directory/LICENSE.part" "$directory/LICENSE"
+node scripts/build-meowx-core.mjs \
+  --os darwin \
+  --arch "$arch" \
+  --out "$directory/mihomo" \
+  --cache-dir "$directory" \
+  --license-dir "$directory"
+host_arch="$(uname -m)"
+if [[ "$host_arch" == x86_64 ]]; then
+  host_arch=amd64
 fi
-cat > "$directory/NOTICE" <<EOF
-Mihomo $version, distributed as a separate executable by Cage.
-Upstream: https://github.com/MetaCubeX/mihomo
-Source for this unmodified binary: https://github.com/MetaCubeX/mihomo/archive/refs/tags/$version.tar.gz
-License: GPL-3.0. See LICENSE.
-Archive: $asset
-SHA-256: $checksum
-Release digest: https://api.github.com/repos/MetaCubeX/mihomo/releases/tags/$version
-EOF
-"$directory/mihomo" -v
+if [[ "$arch" == "$host_arch" ]]; then
+  "$directory/mihomo" -v
+fi

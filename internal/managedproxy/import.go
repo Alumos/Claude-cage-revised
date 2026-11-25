@@ -75,7 +75,7 @@ func parseNodes(data []byte, sourceID string) ([]Node, []NodeIssue, error) {
 		return nil, nil, errors.New("配置需要包含 1–3000 个 proxies 节点；仅含远程 provider 的配置请改为导入节点订阅链接")
 	}
 	types := map[string]bool{}
-	for _, k := range strings.Fields("http socks5 ss ssr vmess vless trojan hysteria hysteria2 tuic anytls mieru ssh") {
+	for _, k := range strings.Fields("http socks5 ss ssr vmess vless trojan hysteria hysteria2 tuic anytls mieru ssh miu snell shadowquic gost-relay trusttunnel sudoku") {
 		types[k] = true
 	}
 	counts := map[string]int{}

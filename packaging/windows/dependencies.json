@@ -4,19 +4,17 @@
     "runtimeVersion": "10.0.15"
   },
   "mihomo": {
-    "version": "v1.19.33",
-    "file": "mihomo-windows-amd64-compatible-v1.19.33.zip",
-    "url": "https://github.com/MetaCubeX/mihomo/releases/download/v1.19.33/mihomo-windows-amd64-compatible-v1.19.33.zip",
-    "algorithm": "SHA256",
-    "hash": "7aaf636a4f2172dcd8ec34ac4f52797b059195e5afd6409508c963e545f8864d",
-    "source": "https://github.com/MetaCubeX/mihomo/archive/refs/tags/v1.19.33.tar.gz"
+    "version": "v0.5.4",
+    "file": "mihomo-windows-amd64-v0.5.4.exe",
+    "builtFromSource": true,
+    "source": "https://github.com/mmwx-group/meowx-core/archive/refs/tags/v0.5.4.tar.gz"
   },
   "mihomoSource": {
-    "version": "v1.19.33",
-    "file": "mihomo-v1.19.33-source.tar.gz",
-    "url": "https://github.com/MetaCubeX/mihomo/archive/refs/tags/v1.19.33.tar.gz",
+    "version": "v0.5.4",
+    "file": "mihomo-v0.5.4-source.tar.gz",
+    "url": "https://github.com/mmwx-group/meowx-core/archive/refs/tags/v0.5.4.tar.gz",
     "algorithm": "SHA256",
-    "hash": "e7c596b37ff27ec487d19b1920f73e0c97a78067ea35766530ee9659ade72711"
+    "hash": "29859e5ff9b5aa51941b5150fda0b596c593a806cabb077614c52729d48aab74"
   },
   "openssh": {
     "version": "10.4.0.0p1-Preview",

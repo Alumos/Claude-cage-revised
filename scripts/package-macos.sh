@@ -84,13 +84,10 @@ xcrun stapler staple "$release/$artifact"
 xcrun stapler validate "$release/$artifact"
 spctl --assess --type open --context context:primary-signature --verbose=2 "$release/$artifact"
 
-# Distribute the corresponding unmodified Mihomo source beside its executable.
+# Distribute the corresponding MeowX core source beside its executable.
 core_version="$(sed -n 's/^version=//p' scripts/fetch-proxy-core.sh)"
 core_source="mihomo-$core_version-source.tar.gz"
-curl --fail --location --retry 2 --connect-timeout 15 --max-time 180 \
-  "https://github.com/MetaCubeX/mihomo/archive/refs/tags/$core_version.tar.gz" \
-  -o "$release/$core_source.part"
-mv "$release/$core_source.part" "$release/$core_source"
+node scripts/build-meowx-core.mjs --prefetch-source-only --cache-dir "$release"
 tar -tzf "$release/$core_source" > /dev/null
 (cd "$release" && shasum -a 256 "$artifact" "$core_source" > SHA256SUMS)
 node scripts/cleanup-apps.mjs --keep "$bundle" --root "$PWD/_output"

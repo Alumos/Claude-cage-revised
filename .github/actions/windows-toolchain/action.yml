@@ -67,8 +67,10 @@ runs:
         path: |
           _output/windows-deps
           _output/linux-deps/mihomo-*.gz
-        key: windows-deps-v3-${{ hashFiles('packaging/windows/dependencies.json', 'packaging/linux/dependencies.json', 'patches/qemu/**', 'scripts/build-qemu-windows.*') }}
+          _output/linux-deps/mihomo-*.gz.json
+        key: windows-deps-v4-${{ hashFiles('packaging/windows/dependencies.json', 'packaging/linux/dependencies.json', 'scripts/meowx-core.json', 'scripts/build-meowx-core.mjs', 'patches/qemu/**', 'scripts/build-qemu-windows.*') }}
         restore-keys: |
+          windows-deps-v3-
           windows-deps-v2-
           cage-windows-deps-
     - name: Build and verify QEMU runtime and package identity
@@ -94,7 +96,8 @@ runs:
         path: |
           _output/windows-deps
           _output/linux-deps/mihomo-*.gz
-        key: windows-deps-v3-${{ hashFiles('packaging/windows/dependencies.json', 'packaging/linux/dependencies.json', 'patches/qemu/**', 'scripts/build-qemu-windows.*') }}
+          _output/linux-deps/mihomo-*.gz.json
+        key: windows-deps-v4-${{ hashFiles('packaging/windows/dependencies.json', 'packaging/linux/dependencies.json', 'scripts/meowx-core.json', 'scripts/build-meowx-core.mjs', 'patches/qemu/**', 'scripts/build-qemu-windows.*') }}
     - uses: actions/cache/restore@v4
       if: inputs.corresponding-sources == 'true'
       id: qemu_sources

@@ -6,14 +6,21 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { createGzip } from "node:zlib";
 import { pipeline } from "node:stream/promises";
-import { fetchBuildArtifact, sha256 as digest } from "./fetch-build-artifact.mjs";
+import { sha256 as digest } from "./fetch-build-artifact.mjs";
+import { buildMeowxCore } from "./build-meowx-core.mjs";
 
 const destination = process.argv[2];
 const offline = process.env.CAGE_CLOUD_KIT;
 async function prepareCore() {
-  const {mihomo} = JSON.parse(fs.readFileSync("packaging/linux/dependencies.json"));
-  const archive = await fetchBuildArtifact(mihomo.url, mihomo.sha256, path.resolve("_output/linux-deps", mihomo.file));
-  return { archive, checksum: mihomo.sha256 };
+  const { mihomo } = JSON.parse(fs.readFileSync("packaging/linux/dependencies.json", "utf8"));
+  const archive = path.resolve("_output/linux-deps", mihomo.file);
+  const result = await buildMeowxCore({
+    os: "linux",
+    arch: "amd64",
+    gzip: archive,
+    cacheDir: path.resolve("_output/linux-deps"),
+  });
+  return { archive: result.gzipPath, checksum: result.gzipSha256 };
 }
 if (destination === "--prefetch") {
   if (!offline) console.log("Verified cloud kit dependency at " + (await prepareCore()).archive);

@@ -1,0 +1,13 @@
+{
+  "version": "v0.5.4",
+  "coreVersion": "meowx-0.5.4",
+  "repo": "https://github.com/mmwx-group/meowx-core",
+  "commit": "62446a087f6fc9fb874c640253f4aac33231626f",
+  "buildTime": "2026-11-20T00:59:42-08:00",
+  "goToolchain": "go1.26.10",
+  "sourceFile": "mihomo-v0.5.4-source.tar.gz",
+  "sourceURL": "https://github.com/mmwx-group/meowx-core/archive/refs/tags/v0.5.4.tar.gz",
+  "sourceDir": "meowx-core-0.5.4",
+  "sourceSha256": "29859e5ff9b5aa51941b5150fda0b596c593a806cabb077614c52729d48aab74",
+  "buildTags": "with_gvisor,no_easytier,no_tailscale,no_zerotier"
+}

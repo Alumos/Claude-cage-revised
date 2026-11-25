@@ -50,6 +50,7 @@ EOF
 chmod -R u+rwX,go+rX,go-w "$stage"
 deb="$output/Cage-$version-linux-amd64.deb"
 dpkg-deb --root-owner-group --build "$stage" "$deb"
-cp _output/linux-deps/mihomo-v1.19.33-source.tar.gz "$output/"
-(cd "$output" && sha256sum "$(basename "$deb")" mihomo-v1.19.33-source.tar.gz > SHA256SUMS)
+core_source=$(node -e 'console.log(JSON.parse(require("fs").readFileSync("packaging/linux/dependencies.json","utf8")).mihomoSource.file)')
+cp "_output/linux-deps/$core_source" "$output/"
+(cd "$output" && sha256sum "$(basename "$deb")" "$core_source" > SHA256SUMS)
 printf 'Packaged: %s\n' "$deb"

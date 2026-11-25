@@ -16,6 +16,7 @@ import (
 
 	"github.com/miekg/dns"
 	"github.com/sylvinus/agent-vm/internal/hostproxy"
+	"go.yaml.in/yaml/v3"
 )
 
 // BootstrapClient serves only explicitly host-routed subscription requests.
@@ -178,20 +179,43 @@ func queryInfrastructureDNS(ctx context.Context, client *http.Client, server str
 	}
 	return netip.Addr{}, errors.New("代理基础设施域名没有可用公网 IPv4")
 }
-// subscriptionUserAgent matches the bundled Mihomo core version without
-// exposing any product-specific identifier to subscription providers.
-const subscriptionUserAgent = "clash.meta/v1.19.33"
+
+// subscriptionUserAgent identifies the bundled MeowX core without exposing any
+// product-specific identifier so MeowX panels return native protocols (miu,
+// snell v6, anytls+reality). Providers that do not return Clash YAML for this
+// UA are retried once with fallbackSubscriptionUserAgent.
+const (
+	subscriptionUserAgent         = "mihomo/1.19.0 MeowX/0.5.4 (Linux)"
+	fallbackSubscriptionUserAgent = "clash.meta/v1.19.33"
+)
 
 func Fetch(ctx context.Context, client *http.Client, rawURL string) ([]byte, string, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil || u.Fragment != "" {
 		return nil, "", errors.New("订阅需要完整的 HTTPS 网址，不支持地址内用户名和密码")
 	}
-	req, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
+	b, usage, err := fetchWithUserAgent(ctx, client, u.String(), subscriptionUserAgent)
+	if err != nil {
+		return nil, "", err
+	}
+	if looksLikeClashSubscription(b) {
+		return b, usage, nil
+	}
+	if fallback, fallbackUsage, fallbackErr := fetchWithUserAgent(ctx, client, u.String(), fallbackSubscriptionUserAgent); fallbackErr == nil && looksLikeClashSubscription(fallback) {
+		if fallbackUsage != "" {
+			usage = fallbackUsage
+		}
+		return fallback, usage, nil
+	}
+	return b, usage, nil
+}
+
+func fetchWithUserAgent(ctx context.Context, client *http.Client, targetURL, userAgent string) ([]byte, string, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", targetURL, nil)
 	if err != nil {
 		return nil, "", errors.New("订阅网址无效")
 	}
-	req.Header.Set("User-Agent", subscriptionUserAgent)
+	req.Header.Set("User-Agent", userAgent)
 	res, err := client.Do(req)
 	if err != nil {
 		return nil, "", errors.New("订阅下载失败，请检查下载路径和服务地址")
@@ -209,4 +233,17 @@ func Fetch(ctx context.Context, client *http.Client, rawURL string) ([]byte, str
 		usage = usageSummary(raw)
 	}
 	return b, usage, nil
+}
+
+func looksLikeClashSubscription(data []byte) bool {
+	var doc map[string]any
+	if yaml.Unmarshal(data, &doc) != nil || len(doc) == 0 {
+		return false
+	}
+	for _, key := range []string{"proxies", "payload", "proxy-providers", "proxy-groups"} {
+		if _, ok := doc[key]; ok {
+			return true
+		}
+	}
+	return false
 }
