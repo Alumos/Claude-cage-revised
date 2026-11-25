@@ -3260,5 +3260,11 @@
   "已保存加密 DNS，可以继续安装。": "DNS chiffré enregistré, vous pouvez continuer l'installation.",
   "请先选择并应用代理节点，再测试加密 DNS。": "Sélectionnez et appliquez d'abord un nœud de proxy avant de tester le DNS chiffré.",
   "正在测试加密 DNS…": "Test du DNS chiffré…",
-  "正在保存加密 DNS…": "Enregistrement du DNS chiffré…"
+  "正在保存加密 DNS…": "Enregistrement du DNS chiffré…",
+  "已配对设备": "Appareils associés",
+  "配对新设备": "Associer un nouvel appareil",
+  "已达配对上限（{0} 台），请先移除不需要的设备。": "Limite d'appareils associés atteinte ({0}). Supprimez d'abord un appareil inutile.",
+  "新设备已配对。": "Nouvel appareil associé.",
+  "最多可同时配对 8 台设备，请先移除不需要的设备": "Vous pouvez associer jusqu'à 8 appareils simultanément. Supprimez d'abord un appareil inutile.",
+  "未找到已配对的设备": "Appareil associé introuvable"
 }
