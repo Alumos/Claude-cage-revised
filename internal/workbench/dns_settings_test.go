@@ -173,7 +173,7 @@ func TestBootstrapDNSReplacementPreflightsCandidateCoreAndPreservesIsolation(t *
 		store.Selected = store.Sources[0].Nodes[0].ID
 		store.Revision = managedproxy.Token()
 		store.BootstrapDNS = []string{"https://1.1.1.1/dns-query"}
-		store.GuestDNS = []string{"https://1.1.1.1/dns-query"}
+		store.GuestDNS = []string{"https://cloudflare-dns.com/dns-query"}
 		if err := store.Save(s.profile); err != nil {
 			t.Fatal(err)
 		}

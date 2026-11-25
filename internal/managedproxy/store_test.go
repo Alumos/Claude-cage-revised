@@ -327,7 +327,7 @@ func TestRuntimeUsesConfiguredResolvers(t *testing.T) {
 		return config.DNS
 	}
 	dns := runtime()
-	if fmt.Sprint(dns["nameserver"]) != "[https://1.1.1.1/dns-query#"+Group+"]" || fmt.Sprint(dns["proxy-server-nameserver"]) != fmt.Sprint(BootstrapDNSURLs()) {
+	if fmt.Sprint(dns["nameserver"]) != "[https://cloudflare-dns.com/dns-query#"+Group+"]" || fmt.Sprint(dns["proxy-server-nameserver"]) != fmt.Sprint(BootstrapDNSURLs()) {
 		t.Fatalf("default resolvers changed: %v", dns)
 	}
 	s.GuestDNS = []string{"https://dns.example/dns-query", "https://8.8.8.8/dns-query"}

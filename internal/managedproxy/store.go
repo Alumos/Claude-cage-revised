@@ -73,7 +73,7 @@ func (s Store) NodeResolvers() []string {
 // the guest DNS endpoints copied when the route was applied.
 func (s Store) CoreDNS() []string {
 	if len(s.GuestDNS) == 0 {
-		return []string{"https://1.1.1.1/dns-query"}
+		return []string{"https://cloudflare-dns.com/dns-query"}
 	}
 	return append([]string(nil), s.GuestDNS...)
 }

@@ -168,7 +168,7 @@ export function InitializationDNS({
                 onChange={(e) => updateField("dns_url", e.target.value)}
                 disabled={disabled}
                 spellCheck="false"
-                placeholder="https://1.1.1.1/dns-query"
+                placeholder="https://cloudflare-dns.com/dns-query"
               />
             </label>
             <label>

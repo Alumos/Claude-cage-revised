@@ -404,7 +404,7 @@ func TestSettingsProbeRebindsActiveCoreOnlyWithoutBootstrapPreflight(t *testing.
 	p.Selected = p.Sources[0].Nodes[0].ID
 	p.Revision = managedproxy.Token()
 	p.BootstrapDNS = []string{"https://1.1.1.1/dns-query"}
-	p.GuestDNS = []string{"https://1.1.1.1/dns-query"}
+	p.GuestDNS = []string{"https://cloudflare-dns.com/dns-query"}
 	if err := p.Save(s.profile); err != nil {
 		t.Fatal(err)
 	}

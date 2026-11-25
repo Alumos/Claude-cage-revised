@@ -130,14 +130,14 @@ func TestDNSFailsOverWithinGuestWindowWhenPrimaryTimesOut(t *testing.T) {
 
 func TestDNSEndpointsDefaultsAndOptIn(t *testing.T) {
 	c := DefaultConfig()
-	if got := c.DNSEndpoints(); !reflect.DeepEqual(got, []string{"https://1.1.1.1/dns-query"}) {
+	if got := c.DNSEndpoints(); !reflect.DeepEqual(got, []string{"https://cloudflare-dns.com/dns-query"}) {
 		t.Fatalf("default must stay a single provider: %v", got)
 	}
 	if got := c.BootstrapEndpoints(); !reflect.DeepEqual(got, DefaultBootstrapDNS) {
 		t.Fatalf("bootstrap default changed: %v", got)
 	}
-	c.DNS = NewDNSOptions([]string{" https://dns.example/dns-query ", "https://1.1.1.1/dns-query", ""}, []string{"https://9.9.9.9/dns-query"}, true)
-	if got := c.DNSEndpoints(); !reflect.DeepEqual(got, []string{"https://1.1.1.1/dns-query", "https://dns.example/dns-query", PublicDNSFallback}) {
+	c.DNS = NewDNSOptions([]string{" https://dns.example/dns-query ", "https://cloudflare-dns.com/dns-query", ""}, []string{"https://9.9.9.9/dns-query"}, true)
+	if got := c.DNSEndpoints(); !reflect.DeepEqual(got, []string{"https://cloudflare-dns.com/dns-query", "https://dns.example/dns-query", PublicDNSFallback}) {
 		t.Fatalf("endpoint order: %v", got)
 	}
 	if got := c.BootstrapEndpoints(); !reflect.DeepEqual(got, []string{"https://9.9.9.9/dns-query"}) {

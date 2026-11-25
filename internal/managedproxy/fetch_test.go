@@ -156,7 +156,7 @@ func TestRuntimeUsesRedundantBootstrapWithoutChangingBusinessDNS(t *testing.T) {
 	if len(want) < 2 || !reflect.DeepEqual(config.DNS.Default, want) || !reflect.DeepEqual(config.DNS.Proxy, want) {
 		t.Fatal("node bootstrap did not receive both DNS services", config.DNS)
 	}
-	if !reflect.DeepEqual(config.DNS.Names, []string{"https://1.1.1.1/dns-query#" + Group}) || (len(config.Rules) < 2 || config.Rules[0] != "IN-USER,cage,"+Group || config.Rules[len(config.Rules)-1] != "MATCH,REJECT") {
+	if !reflect.DeepEqual(config.DNS.Names, []string{"https://cloudflare-dns.com/dns-query#" + Group}) || (len(config.Rules) < 2 || config.Rules[0] != "IN-USER,cage,"+Group || config.Rules[len(config.Rules)-1] != "MATCH,REJECT") {
 		t.Fatal("bootstrap fallback changed business routing", config)
 	}
 }
