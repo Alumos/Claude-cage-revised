@@ -27,9 +27,28 @@ mkdir -m 0755 "$stage/lists"
 # requires the Debian archive signature and package hashes; no insecure
 # options are enabled.
 schemes=http
+has_ca=0
 if [ -s /etc/ssl/certs/ca-certificates.crt ]; then
   schemes='https http'
+  has_ca=1
 fi
+choice=${1:-}
+if [ -z "$choice" ] && [ -f /etc/claude-cage/debian-mirror ]; then
+  choice=$(cat /etc/claude-cage/debian-mirror)
+fi
+sources=''
+if [ "$has_ca" = 1 ]; then
+  case "$choice" in
+    tw) sources='https://debian.csie.ntu.edu.tw/debian-security https://mirrors.zju.edu.cn/debian-security https://mirrors.nju.edu.cn/debian-security https://mirrors.ustc.edu.cn/debian-security https://mirrors.tuna.tsinghua.edu.cn/debian-security';;
+    tuna) sources='https://mirrors.tuna.tsinghua.edu.cn/debian-security https://mirrors.nju.edu.cn/debian-security https://mirrors.ustc.edu.cn/debian-security https://mirrors.zju.edu.cn/debian-security';;
+    zju) sources='https://mirrors.zju.edu.cn/debian-security https://mirrors.nju.edu.cn/debian-security https://mirrors.ustc.edu.cn/debian-security https://mirrors.tuna.tsinghua.edu.cn/debian-security';;
+    nju) sources='https://mirrors.nju.edu.cn/debian-security https://mirrors.ustc.edu.cn/debian-security https://mirrors.zju.edu.cn/debian-security https://mirrors.tuna.tsinghua.edu.cn/debian-security';;
+    ustc) sources='https://mirrors.ustc.edu.cn/debian-security https://mirrors.nju.edu.cn/debian-security https://mirrors.zju.edu.cn/debian-security https://mirrors.tuna.tsinghua.edu.cn/debian-security';;
+  esac
+fi
+for scheme in $schemes; do
+  sources="$sources ${scheme}://deb.debian.org/debian-security"
+done
 apt_bootstrap_run() {
   env DEBIAN_FRONTEND=noninteractive apt-get \
     -o Acquire::Retries=0 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 \
@@ -48,8 +67,8 @@ apt_bootstrap_get() {
   return "$status"
 }
 status=1
-for scheme in $schemes; do
-  printf 'deb [signed-by=/usr/share/keyrings/debian-archive-keyring.gpg] %s://deb.debian.org/debian-security trixie-security main\n' "$scheme" > "$stage/security.list"
+for source_url in $sources; do
+  printf 'deb [signed-by=/usr/share/keyrings/debian-archive-keyring.gpg] %s trixie-security main\n' "$source_url" > "$stage/security.list"
   if apt_bootstrap_run update; then
     status=0
     break

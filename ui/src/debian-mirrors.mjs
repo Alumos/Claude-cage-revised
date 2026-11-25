@@ -18,4 +18,22 @@ export function formatSpeed(bytesPerSecond) {
   return `${Math.round(bytesPerSecond / 1024)} KB/s`;
 }
 
-export const mirrorNames = { nju: "南京大学镜像", ustc: "中国科学技术大学镜像" };
+export const mirrorNames = {
+  auto: "自动（官方源优先）",
+  official: "仅 Debian 官方源",
+  tw: "台湾大学镜像",
+  tuna: "清华大学镜像",
+  zju: "浙江大学镜像",
+  nju: "南京大学镜像",
+  ustc: "中国科学技术大学镜像",
+};
+
+export const mirrorOptions = [
+  ["auto", "自动（官方源优先）"],
+  ["tw", "台湾大学镜像"],
+  ["tuna", "清华大学镜像"],
+  ["zju", "浙江大学镜像"],
+  ["nju", "南京大学镜像"],
+  ["ustc", "中国科学技术大学镜像"],
+  ["official", "仅 Debian 官方源"],
+];

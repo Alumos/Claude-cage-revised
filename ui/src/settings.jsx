@@ -41,6 +41,7 @@ import { ResourceSettings } from "./resources";
 import { DiagnosticSettings } from "./diagnostics.jsx";
 import { AccountSettings } from "./account";
 import { AboutSettings } from "./about-settings";
+import { mirrorOptions } from "./debian-mirrors.mjs";
 import { useTranslation } from "./interface-language.mjs";
 const sectionGroups = [
   [
@@ -723,6 +724,25 @@ export function SettingsPanel({
                       </small>
                     </div>
                     <FolderOpen size={18} className="settings-row-icon" />
+                  </div>
+                  <div className="settings-row">
+                    <div className="settings-row-copy">
+                      <strong>{tr("Debian 软件源")}</strong>
+                      <small>{tr("下次安装、更新或维护环境时生效。")}</small>
+                    </div>
+                    <div className="settings-row-control">
+                      <InlineSelect
+                        aria-label={tr("Debian 软件源")}
+                        value={draft.debian_mirror || "auto"}
+                        onValueChange={(next) => update("debian_mirror", next)}
+                      >
+                        {mirrorOptions.map(([value, label]) => (
+                          <option key={value} value={value}>
+                            {tr(label)}
+                          </option>
+                        ))}
+                      </InlineSelect>
+                    </div>
                   </div>
                 </div>
                 {status.local_vm_storage && !isRemoteClient() && <EnvironmentStorage status={status} onConfirm={onConfirm} />}

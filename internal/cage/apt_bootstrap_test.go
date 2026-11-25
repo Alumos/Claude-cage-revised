@@ -192,6 +192,67 @@ esac
 		})
 	}
 }
+func TestAPTBootstrapUsesSelectedMirrorFirstAndFallsBackToOfficial(t *testing.T) {
+	for _, tc := range []struct {
+		mode, choice, wantFirst string
+		wantOfficial            bool
+	}{
+		{"mirror-ok", "tw", "https://debian.csie.ntu.edu.tw/debian-security", false},
+		{"mirror-fallback", "zju", "https://mirrors.zju.edu.cn/debian-security", true},
+	} {
+		t.Run(tc.mode, func(t *testing.T) {
+			dir := t.TempDir()
+			os.WriteFile(filepath.Join(dir, "version"), []byte("3.0.3"), 0600)
+			os.WriteFile(filepath.Join(dir, "os-release"), []byte("ID=debian\nVERSION_ID=13\n"), 0600)
+			os.WriteFile(filepath.Join(dir, "ca.crt"), []byte("bundle"), 0600)
+			commands := map[string]string{
+				"sudo":       "#!/bin/sh\nexec \"$@\"\n",
+				"dpkg-query": "#!/bin/sh\ncat \"$FIXTURE/version\"\n",
+				"dpkg":       "#!/bin/sh\n[ \"$2\" != 3.0.3 ]\n",
+				"apt-get": `#!/bin/sh
+for arg; do
+  case "$arg" in Dir::Etc::sourcelist=*) list=${arg#Dir::Etc::sourcelist=};; esac
+done
+read _ _ url _ < "$list"
+case "$*" in
+ *' update')
+  printf '%s\n' "$url" >> "$FIXTURE/updates"
+  if [ "$MODE" = mirror-fallback ]; then
+    case "$url" in
+     https://deb.debian.org/*) ;;
+     *) exit 100;;
+    esac
+  fi;;
+ *'install '*) echo 3.0.4 > "$FIXTURE/version";;
+esac
+`,
+			}
+			for name, body := range commands {
+				if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			script := debianMirrorChoice(tc.choice) + strings.ReplaceAll(APTBootstrapScript, ". /etc/os-release", ". \"$FIXTURE/os-release\"")
+			script = strings.ReplaceAll(script, "/etc/ssl/certs/ca-certificates.crt", "$FIXTURE/ca.crt")
+			cmd := exec.Command("sh", "-c", script)
+			cmd.Env = append(os.Environ(), "PATH="+dir+":"+os.Getenv("PATH"), "FIXTURE="+dir, "MODE="+tc.mode, "TMPDIR="+dir)
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				t.Fatalf("%v %s", err, out)
+			}
+			updates, _ := os.ReadFile(filepath.Join(dir, "updates"))
+			lines := strings.Split(strings.TrimSpace(string(updates)), "\n")
+			if len(lines) == 0 || lines[0] != tc.wantFirst {
+				t.Fatalf("first tried source = %q, want %q (all=%q)", lines, tc.wantFirst, string(updates))
+			}
+			hasOfficial := strings.Contains(string(updates), "https://deb.debian.org/debian-security")
+			if hasOfficial != tc.wantOfficial {
+				t.Fatalf("official fallback = %v, want %v (all=%q)", hasOfficial, tc.wantOfficial, string(updates))
+			}
+		})
+	}
+}
+
 func TestGuestInstallEntrypointsCheckAPTFirst(t *testing.T) {
 	for name, script := range map[string]string{"lima": DebianPrepareScript, "services": GuestSetup, "start": DefaultConfig().StartScript(), "tools": ToolsUpdateScript()} {
 		gate := strings.Index(script, "CAGE_APT_BOOTSTRAP")

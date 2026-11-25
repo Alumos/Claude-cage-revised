@@ -445,17 +445,22 @@ func (l *Lima) Create(ctx context.Context, name, template string, s Settings, lo
 	})
 }
 
-// All three locations must supply the exact release pinned by the embedded
+// All candidate locations must supply the exact release pinned by the embedded
 // template. In particular, never accept an unpinned daily image on fallback.
 func cageDebianImages(images []limatype.Image) ([]byte, error) {
+	return cageDebianImagesFor(images, os.Getenv(cage.DebianMirrorEnv))
+}
+
+func cageDebianImagesFor(images []limatype.Image, preference string) ([]byte, error) {
 	upstream := debianImageMirrors[0].base
+	mirrors := orderedDebianImageMirrors(preference)
 	var candidates []limatype.Image
 	for _, img := range images {
 		suffix, ok := strings.CutPrefix(img.Location, upstream)
 		if !ok || img.Variant != "genericcloud" || img.Digest.Validate() != nil || img.Digest.Algorithm() != "sha512" {
 			continue
 		}
-		for _, mirror := range debianImageMirrors {
+		for _, mirror := range mirrors {
 			candidate := img
 			candidate.Location = mirror.base + suffix
 			candidates = append(candidates, candidate)

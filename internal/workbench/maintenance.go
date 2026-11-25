@@ -53,7 +53,7 @@ func maintenanceDestination(address string, connect bool) bool {
 	}
 	host = strings.ToLower(host)
 	switch host {
-	case "mirrors.nju.edu.cn", "mirrors.ustc.edu.cn", "cdn.npmmirror.com", "api.snapcraft.io", "storage.snapcraftcontent.com", "canonical-lgw01.cdn.snapcraftcontent.com", "canonical-lcy01.cdn.snapcraftcontent.com", "canonical-lcy02.cdn.snapcraftcontent.com", "canonical-bos01.cdn.snapcraftcontent.com", "cloudfront.cdn.snapcraftcontent.com", "codeload.github.com":
+	case "mirrors.nju.edu.cn", "mirrors.ustc.edu.cn", "mirrors.zju.edu.cn", "mirrors.tuna.tsinghua.edu.cn", "debian.csie.ntu.edu.tw", "cdn.npmmirror.com", "api.snapcraft.io", "storage.snapcraftcontent.com", "canonical-lgw01.cdn.snapcraftcontent.com", "canonical-lcy01.cdn.snapcraftcontent.com", "canonical-lcy02.cdn.snapcraftcontent.com", "canonical-bos01.cdn.snapcraftcontent.com", "cloudfront.cdn.snapcraftcontent.com", "codeload.github.com":
 		return connect
 	}
 	return maintenanceOrigins[host]
@@ -220,6 +220,18 @@ func RunMaintenanceScript(ctx context.Context, configPath, script string, stdout
 	return runMaintenanceScript(ctx, configPath, cfg, cfg.GuestProfile.Linux(script), stdout, stderr)
 }
 
+func savedDebianMirror(profile string) string {
+	data, err := os.ReadFile(filepath.Join(profile, "workbench.json"))
+	if err != nil {
+		return ""
+	}
+	var prefs Preferences
+	if json.Unmarshal(data, &prefs) != nil || !cage.ValidDebianMirror(prefs.DebianMirror) {
+		return ""
+	}
+	return prefs.DebianMirror
+}
+
 func runMaintenanceScript(ctx context.Context, configPath string, cfg cage.Config, script string, stdout, stderr io.Writer) error {
 	profile := filepath.Dir(configPath)
 	if err := cfg.RequireManagedProxy(profile); err != nil {
@@ -250,7 +262,7 @@ func runMaintenanceScript(ctx context.Context, configPath string, cfg cage.Confi
 	command := "sudo systemd-run --quiet --pipe --wait --collect --unit=cage-maintenance-operation --property=User=cage --property=RuntimeMaxSec=infinity --property=KillMode=control-group --setenv=HOME=/home/cage "
 	command = cfg.GuestProfile.Linux(command) + "--working-directory=" + shellescape.Quote(guestPath(s.environmentDir())) + " /bin/bash -se"
 	cmd := s.sshCommandWithForwarding(ctx, "-o", "ExitOnForwardFailure=yes", "-R", forward, "-T", s.sshTarget(), "--", command)
-	cmd.Stdin = strings.NewReader(maintenanceScript(cage.DebianPrepareScript+"\n"+script, proxy.token, containerenv.Configured(profile)))
+	cmd.Stdin = strings.NewReader(maintenanceScript(cage.DebianPrepareScriptFor(savedDebianMirror(profile))+"\n"+script, proxy.token, containerenv.Configured(profile)))
 	var output failureOutput
 	cmd.Stdout = output.writer(stdout)
 	cmd.Stderr = output.writer(stderr)

@@ -3266,5 +3266,12 @@
   "已达配对上限（{0} 台），请先移除不需要的设备。": "Se alcanzó el límite de dispositivos vinculados ({0}). Elimina primero un dispositivo que no necesites.",
   "新设备已配对。": "Nuevo dispositivo vinculado.",
   "最多可同时配对 8 台设备，请先移除不需要的设备": "Se pueden vincular hasta 8 dispositivos a la vez. Elimina primero un dispositivo que no necesites.",
-  "未找到已配对的设备": "No se encontró el dispositivo vinculado"
+  "未找到已配对的设备": "No se encontró el dispositivo vinculado",
+  "自动（官方源优先）": "Automático (fuente oficial primero)",
+  "仅 Debian 官方源": "Solo fuente oficial de Debian",
+  "台湾大学镜像": "Espejo de la Universidad Nacional de Taiwán",
+  "清华大学镜像": "Espejo de la Universidad Tsinghua (TUNA)",
+  "浙江大学镜像": "Espejo de la Universidad de Zhejiang",
+  "优先使用 {0}（不可达时自动回退其他镜像与官方源）": "Preferir {0} (con respaldo automático a otros espejos y a la fuente oficial si no está disponible)",
+  "下次安装、更新或维护环境时生效。": "Se aplicará en la próxima instalación, actualización o mantenimiento del entorno."
 }

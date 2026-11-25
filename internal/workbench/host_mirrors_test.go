@@ -55,19 +55,24 @@ func TestProbeDebianMirrorsRecommendation(t *testing.T) {
 	}))
 	defer server.Close()
 	withMirrorFixture(t, server.URL)
-	set := func(nju, ustc, official time.Duration, down ...string) {
+	set := func(delays map[string]time.Duration, down ...string) {
 		mu.Lock()
 		defer mu.Unlock()
-		delay["nju"], delay["ustc"], delay["official"] = nju, ustc, official
+		for _, c := range debianMirrorCandidates {
+			delay[c.ID] = 80 * time.Millisecond
+		}
+		for id, wait := range delays {
+			delay[id] = wait
+		}
 		clear(unavailable)
 		for _, id := range down {
 			unavailable[id] = true
 		}
 	}
 	// Overseas exit: the official CDN is fastest; keep the official-first default.
-	set(40*time.Millisecond, 0, 0, "ustc")
+	set(map[string]time.Duration{"nju": 40 * time.Millisecond, "official": 0}, "ustc")
 	result := probeDebianMirrors(context.Background(), server.Client(), "trixie", "arm64")
-	if len(result.Samples) != 3 || result.Recommended != "auto" || result.Domestic != "nju" {
+	if len(result.Samples) != len(debianMirrorCandidates) || result.Recommended != "auto" || result.Domestic != "nju" {
 		t.Fatalf("%+v", result)
 	}
 	for _, sample := range result.Samples {
@@ -85,18 +90,21 @@ func TestProbeDebianMirrorsRecommendation(t *testing.T) {
 	if !strings.HasSuffix(served["official"], "/dists/trixie/main/binary-arm64/Packages.gz") {
 		t.Fatalf("wrong index path: %s", served["official"])
 	}
-	// Domestic connection: the faster mirror is recommended by name, so the
-	// guest puts it first even though nju precedes it in the candidate list.
-	set(50*time.Millisecond, 0, 60*time.Millisecond)
+	// Domestic or regional mirror clearly faster: recommend it by name.
+	set(map[string]time.Duration{"nju": 50 * time.Millisecond, "ustc": 0, "official": 60 * time.Millisecond})
 	if result = probeDebianMirrors(context.Background(), server.Client(), "trixie", "arm64"); result.Recommended != "ustc" || result.Domestic != "ustc" {
 		t.Fatalf("fastest mirror not recommended: %+v", result)
 	}
-	set(0, 50*time.Millisecond, 60*time.Millisecond)
+	set(map[string]time.Duration{"tw": 0, "official": 60 * time.Millisecond})
+	if result = probeDebianMirrors(context.Background(), server.Client(), "trixie", "arm64"); result.Recommended != "tw" || result.Domestic != "tw" {
+		t.Fatalf("fastest tw mirror not recommended: %+v", result)
+	}
+	set(map[string]time.Duration{"nju": 0, "ustc": 50 * time.Millisecond, "official": 60 * time.Millisecond})
 	if result = probeDebianMirrors(context.Background(), server.Client(), "trixie", "arm64"); result.Recommended != "nju" {
 		t.Fatalf("fastest mirror not recommended: %+v", result)
 	}
 	// A marginal difference is noise; the default stays.
-	set(20*time.Millisecond, 60*time.Millisecond, 22*time.Millisecond)
+	set(map[string]time.Duration{"nju": 20 * time.Millisecond, "ustc": 60 * time.Millisecond, "official": 22 * time.Millisecond})
 	if result = probeDebianMirrors(context.Background(), server.Client(), "trixie", "arm64"); result.Recommended != "auto" || result.Domestic != "nju" {
 		t.Fatalf("marginal difference changed the default: %+v", result)
 	}
@@ -111,7 +119,7 @@ func TestProbeDebianMirrorsWithoutAnyReachableSource(t *testing.T) {
 	withMirrorFixture(t, "http://127.0.0.1:1")
 	client := &http.Client{Timeout: time.Second}
 	result := probeDebianMirrors(context.Background(), client, "trixie", "amd64")
-	if result.Recommended != "auto" || result.Domestic != "nju" || len(result.Samples) != 3 || result.Samples[0].Error == "" {
+	if result.Recommended != "auto" || result.Domestic != "nju" || len(result.Samples) != len(debianMirrorCandidates) || result.Samples[0].Error == "" {
 		t.Fatalf("%+v", result)
 	}
 }
@@ -211,7 +219,14 @@ func TestMirrorProbeClientUsesOnlyTheCageProxy(t *testing.T) {
 	result := probeDebianMirrors(context.Background(), client, "trixie", "amd64")
 	mu.Lock()
 	defer mu.Unlock()
-	want := []string{"CONNECT mirrors.nju.edu.cn:443", "CONNECT mirrors.ustc.edu.cn:443", "CONNECT deb.debian.org:443"}
+	want := []string{
+		"CONNECT mirrors.nju.edu.cn:443",
+		"CONNECT mirrors.ustc.edu.cn:443",
+		"CONNECT mirrors.zju.edu.cn:443",
+		"CONNECT mirrors.tuna.tsinghua.edu.cn:443",
+		"CONNECT debian.csie.ntu.edu.tw:443",
+		"CONNECT deb.debian.org:443",
+	}
 	if strings.Join(targets, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("proxy saw %q, want %q", targets, want)
 	}
@@ -229,7 +244,7 @@ func TestDebianMirrorPreferenceValidation(t *testing.T) {
 	settings := func(value string) Settings {
 		return Settings{Preferences: Preferences{Keyboard: "mac", DebianMirror: value}, DNSURL: "https://1.1.1.1/dns-query", Timezone: "Etc/UTC", Locale: "en_US.UTF-8", BrowserLanguage: "en-US"}
 	}
-	for _, value := range []string{"", "auto", "official", "nju", "ustc"} {
+	for _, value := range []string{"", "auto", "official", "tw", "tuna", "zju", "nju", "ustc"} {
 		if _, _, err := proposedSettings(settings(value), cage.DefaultConfig(), t.TempDir()); err != nil {
 			t.Fatalf("%q rejected: %v", value, err)
 		}

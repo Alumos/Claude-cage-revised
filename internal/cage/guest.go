@@ -246,7 +246,7 @@ var DebianMirrorsScript string
 var aptBootstrap string
 
 // APTBootstrapScript preserves the temporary maintenance proxy through sudo.
-var APTBootstrapScript = "set -e\nsudo env APT_CONFIG=\"${CAGE_APT_CONFIG:-/dev/null}\" sh -se <<'CAGE_APT_BOOTSTRAP'\n" + aptBootstrap + "\nCAGE_APT_BOOTSTRAP\n"
+var APTBootstrapScript = "set -e\nsudo env APT_CONFIG=\"${CAGE_APT_CONFIG:-/dev/null}\" sh -s -e -- \"${debian_mirror_choice:-}\" <<'CAGE_APT_BOOTSTRAP'\n" + aptBootstrap + "\nCAGE_APT_BOOTSTRAP\n"
 
 // DebianPrepareScript runs before Lima's own dependency installation as well
 // as Cage setup. Its version check also covers previously created guests.
@@ -281,11 +281,11 @@ trap 'rm -rf "$_curl_compat_home"' EXIT
 }
 
 // ValidDebianMirror reports whether preference names a Debian source policy:
-// "auto" (official first), "official" (pinned), or "nju" / "ustc" (that
-// domestic mirror first, the other next, the official source last).
+// "auto" (official first), "official" (pinned), or a verified HTTPS mirror
+// ("tw", "tuna", "zju", "nju", "ustc") tried first before automatic fallback.
 func ValidDebianMirror(preference string) bool {
 	switch preference {
-	case "auto", "official", "nju", "ustc":
+	case "auto", "official", "tw", "tuna", "zju", "nju", "ustc":
 		return true
 	}
 	return false
@@ -301,7 +301,7 @@ func debianMirrorChoice(preference string) string {
 // DebianPrepareScriptFor pins the source policy for this run. An empty or
 // unknown preference keeps the guest's saved choice or its default probe.
 func DebianPrepareScriptFor(preference string) string {
-	return "#!/bin/sh\n" + APTBootstrapScript + "\n" + debianMirrorChoice(preference) + DebianMirrorsScript
+	return "#!/bin/sh\n" + debianMirrorChoice(preference) + APTBootstrapScript + "\n" + DebianMirrorsScript
 }
 
 //go:embed chromium-download.py

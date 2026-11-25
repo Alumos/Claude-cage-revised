@@ -40,10 +40,10 @@ type Preferences struct {
 	Clock12Hour           bool   `json:"clock_12_hour"`
 	AutoTimezone          bool   `json:"auto_timezone"`
 	AutoLanguage          bool   `json:"auto_language"`
-	// DebianMirror is the APT source policy for Debian guests, chosen in the
-	// install dialog after measuring the sources through the proxy. Empty
-	// keeps the guest default ("auto": official first); "nju" or "ustc" puts
-	// that mirror first.
+	// DebianMirror is the APT and image source policy for Debian guests, chosen
+	// in the install dialog or settings. Empty keeps the guest default ("auto":
+	// official first); "official" pins Debian official sources; "tw", "tuna",
+	// "zju", "nju", or "ustc" puts that verified HTTPS mirror first.
 	DebianMirror string `json:"debian_mirror,omitempty"`
 	// InstallTLS12Compat caps curl at TLS 1.2 during guest installation and
 	// tool downloads for proxies that drop curl's TLS 1.3 ClientHello. Off by

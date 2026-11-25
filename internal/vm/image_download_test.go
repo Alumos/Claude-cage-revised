@@ -63,11 +63,13 @@ func TestImageDownloadSummaryNamesDebianMirrors(t *testing.T) {
 		"image download interrupted; partial data retained for setup retry: unexpected EOF",
 		"unexpected HTTP status Too Many Requests, body=``",
 		"image checksum mismatch; partial data discarded: expected digest",
+		"context deadline exceeded",
+		"connection refused",
 	} {
 		lines = append(lines, fmt.Sprintf("failed to download `%s%s`: %s", debianImageMirrors[i].base, image, cause))
 	}
 	got := ImageDownloadSummary(errors.New(strings.Join(lines, "\n")))
-	if want := ImageDownloadMarker + " official:eof:kept nju:http-429:none ustc:checksum:none"; got != want {
+	if want := ImageDownloadMarker + " official:eof:kept nju:http-429:none ustc:checksum:none zju:timeout:none cdimage:refused:none"; got != want {
 		t.Fatalf("summary = %q, want %q", got, want)
 	}
 	for _, err := range []error{nil, errors.New("failed to start: exit status 1"), errors.New("failed to download the nerdctl archive")} {

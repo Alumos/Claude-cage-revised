@@ -10,7 +10,7 @@ import (
 
 func TestDebianMirrorFailureFallbackAndPreference(t *testing.T) {
 	old := "https://mirrors.nju.edu.cn/debian\tpriority:1\nhttps://mirrors.ustc.edu.cn/debian\tpriority:2\nhttps://deb.debian.org/debian\tpriority:3\n"
-	for _, mode := range []string{"reachable", "bookworm", "tls-failure", "official-failure", "nju-failure", "official", "custom", "old", "reboot", "invalid", "nju", "ustc", "ustc-nju-failure", "host-ustc", "host-invalid"} {
+	for _, mode := range []string{"reachable", "bookworm", "tls-failure", "official-failure", "nju-failure", "official", "custom", "old", "reboot", "invalid", "nju", "ustc", "zju", "tuna", "tw", "ustc-nju-failure", "host-ustc", "host-tw", "host-invalid"} {
 		t.Run(mode, func(t *testing.T) {
 			dir := t.TempDir()
 			mirrors := filepath.Join(dir, "mirrors")
@@ -30,11 +30,11 @@ func TestDebianMirrorFailureFallbackAndPreference(t *testing.T) {
 			os.WriteFile(filepath.Join(mirrors, "debian-security.list"), []byte("https://deb.debian.org/debian-security\n"), 0644)
 			preference := filepath.Join(dir, "preference")
 			switch mode {
-			case "official", "invalid", "nju", "ustc":
+			case "official", "invalid", "nju", "ustc", "zju", "tuna", "tw":
 				os.WriteFile(preference, []byte(mode+"\n"), 0644)
 			case "ustc-nju-failure":
 				os.WriteFile(preference, []byte("ustc\n"), 0644)
-			case "host-ustc":
+			case "host-ustc", "host-tw":
 				// The host's choice replaces an older saved preference.
 				os.WriteFile(preference, []byte("official\n"), 0644)
 			}
@@ -74,6 +74,8 @@ exit 0
 			switch mode {
 			case "host-ustc":
 				first = debianMirrorChoice("ustc")
+			case "host-tw":
+				first = debianMirrorChoice("tw")
 			case "host-invalid":
 				// Go never emits an unknown value; the guest script still rejects one.
 				first = "debian_mirror_choice=fastest\n"
@@ -96,7 +98,7 @@ exit 0
 					t.Fatal("custom source overwritten")
 				}
 			case "official", "tls-failure", "reachable", "bookworm", "old", "reboot":
-				if strings.Contains(got, "mirrors.") || !strings.Contains(got, "deb.debian.org") {
+				if strings.Contains(got, "mirrors.") || strings.Contains(got, "debian.csie.ntu.edu.tw") || !strings.Contains(got, "deb.debian.org") {
 					t.Fatal(got)
 				}
 			case "nju-failure":
@@ -105,27 +107,45 @@ exit 0
 				}
 			case "ustc", "host-ustc":
 				// The mirror measured fastest comes first, not a fixed order.
-				if got != "# Cage managed Debian mirrors\nhttps://mirrors.ustc.edu.cn/debian\tpriority:1\nhttps://mirrors.nju.edu.cn/debian\tpriority:2\nhttps://deb.debian.org/debian\tpriority:3\n" {
+				if got != "# Cage managed Debian mirrors\nhttps://mirrors.ustc.edu.cn/debian\tpriority:1\nhttps://mirrors.nju.edu.cn/debian\tpriority:2\nhttps://mirrors.zju.edu.cn/debian\tpriority:3\nhttps://mirrors.tuna.tsinghua.edu.cn/debian\tpriority:4\nhttps://deb.debian.org/debian\tpriority:5\n" {
 					t.Fatal(got)
 				}
 			case "ustc-nju-failure":
-				if got != "# Cage managed Debian mirrors\nhttps://mirrors.ustc.edu.cn/debian\tpriority:1\nhttps://deb.debian.org/debian\tpriority:2\n" {
+				if got != "# Cage managed Debian mirrors\nhttps://mirrors.ustc.edu.cn/debian\tpriority:1\nhttps://mirrors.zju.edu.cn/debian\tpriority:2\nhttps://mirrors.tuna.tsinghua.edu.cn/debian\tpriority:3\nhttps://deb.debian.org/debian\tpriority:4\n" {
+					t.Fatal(got)
+				}
+			case "zju":
+				if got != "# Cage managed Debian mirrors\nhttps://mirrors.zju.edu.cn/debian\tpriority:1\nhttps://mirrors.nju.edu.cn/debian\tpriority:2\nhttps://mirrors.ustc.edu.cn/debian\tpriority:3\nhttps://mirrors.tuna.tsinghua.edu.cn/debian\tpriority:4\nhttps://deb.debian.org/debian\tpriority:5\n" {
+					t.Fatal(got)
+				}
+			case "tuna":
+				if got != "# Cage managed Debian mirrors\nhttps://mirrors.tuna.tsinghua.edu.cn/debian\tpriority:1\nhttps://mirrors.nju.edu.cn/debian\tpriority:2\nhttps://mirrors.ustc.edu.cn/debian\tpriority:3\nhttps://mirrors.zju.edu.cn/debian\tpriority:4\nhttps://deb.debian.org/debian\tpriority:5\n" {
+					t.Fatal(got)
+				}
+			case "tw", "host-tw":
+				if got != "# Cage managed Debian mirrors\nhttps://debian.csie.ntu.edu.tw/debian\tpriority:1\nhttps://mirrors.zju.edu.cn/debian\tpriority:2\nhttps://mirrors.nju.edu.cn/debian\tpriority:3\nhttps://mirrors.ustc.edu.cn/debian\tpriority:4\nhttps://mirrors.tuna.tsinghua.edu.cn/debian\tpriority:5\nhttps://deb.debian.org/debian\tpriority:6\n" {
 					t.Fatal(got)
 				}
 			default:
-				// official-failure and nju: nju, ustc, then the official source.
-				if got != "# Cage managed Debian mirrors\n"+old {
+				// official-failure and nju: nju, ustc, zju, tuna, tw, then the official source.
+				want := "# Cage managed Debian mirrors\nhttps://mirrors.nju.edu.cn/debian\tpriority:1\nhttps://mirrors.ustc.edu.cn/debian\tpriority:2\nhttps://mirrors.zju.edu.cn/debian\tpriority:3\nhttps://mirrors.tuna.tsinghua.edu.cn/debian\tpriority:4\nhttps://debian.csie.ntu.edu.tw/debian\tpriority:5\nhttps://deb.debian.org/debian\tpriority:6\n"
+				if got != want {
 					t.Fatal(got)
 				}
 			}
-			if mode == "nju" || mode == "ustc" || mode == "host-ustc" {
+			if mode == "nju" || mode == "ustc" || mode == "zju" || mode == "tuna" || mode == "tw" || mode == "host-ustc" || mode == "host-tw" {
 				if probes, _ := os.ReadFile(filepath.Join(dir, "probes")); strings.Contains(string(probes), "deb.debian.org") {
-					t.Fatal("domestic preference probed the official source first")
+					t.Fatal("mirror preference probed the official source first")
 				}
 			}
 			if mode == "host-ustc" {
 				// The host's measured choice is kept for later runs without it.
 				if saved, _ := os.ReadFile(preference); strings.TrimSpace(string(saved)) != "ustc" {
+					t.Fatalf("host choice not persisted: %q", saved)
+				}
+			}
+			if mode == "host-tw" {
+				if saved, _ := os.ReadFile(preference); strings.TrimSpace(string(saved)) != "tw" {
 					t.Fatalf("host choice not persisted: %q", saved)
 				}
 			}
@@ -139,8 +159,8 @@ exit 0
 				if err != nil || !strings.Contains(string(probes), "/dists/"+suite+"/InRelease") || !strings.Contains(string(probes), "/dists/"+suite+"-security/InRelease") {
 					t.Fatalf("wrong distribution probes: %s, %v", probes, err)
 				}
-				if strings.Contains(string(probes), "mirrors.") {
-					t.Fatal("reachable official source still contacted domestic mirrors")
+				if strings.Contains(string(probes), "mirrors.") || strings.Contains(string(probes), "debian.csie.ntu.edu.tw") {
+					t.Fatal("reachable official source still contacted mirrors")
 				}
 			}
 			if out, err := run(""); err != nil {

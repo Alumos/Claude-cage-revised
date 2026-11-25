@@ -13,17 +13,20 @@ fi
 # maintenance runs, which do not repeat the measurement.
 if [ -n "${1:-}" ]; then
   case "$1" in
-    auto|official|nju|ustc) ;;
-    *) echo 'Invalid Debian mirror choice: use auto, official, nju or ustc.' >&2; exit 1;;
+    auto|official|tw|tuna|zju|nju|ustc) ;;
+    *) echo 'Invalid Debian mirror choice: use auto, official, tw, tuna, zju, nju or ustc.' >&2; exit 1;;
   esac
   preference=$1
   mkdir -p "$(dirname /etc/claude-cage/debian-mirror)"
   printf '%s\n' "$preference" > /etc/claude-cage/debian-mirror
 fi
 case "$preference" in
-  auto|official|nju) domestic="https://mirrors.nju.edu.cn https://mirrors.ustc.edu.cn";;
-  ustc) domestic="https://mirrors.ustc.edu.cn https://mirrors.nju.edu.cn";;
-  *) echo 'Invalid /etc/claude-cage/debian-mirror: use auto, official, nju or ustc.' >&2; exit 1;;
+  auto|official|nju) mirrors="https://mirrors.nju.edu.cn https://mirrors.ustc.edu.cn https://mirrors.zju.edu.cn https://mirrors.tuna.tsinghua.edu.cn https://debian.csie.ntu.edu.tw";;
+  ustc) mirrors="https://mirrors.ustc.edu.cn https://mirrors.nju.edu.cn https://mirrors.zju.edu.cn https://mirrors.tuna.tsinghua.edu.cn";;
+  zju) mirrors="https://mirrors.zju.edu.cn https://mirrors.nju.edu.cn https://mirrors.ustc.edu.cn https://mirrors.tuna.tsinghua.edu.cn";;
+  tuna) mirrors="https://mirrors.tuna.tsinghua.edu.cn https://mirrors.nju.edu.cn https://mirrors.ustc.edu.cn https://mirrors.zju.edu.cn";;
+  tw) mirrors="https://debian.csie.ntu.edu.tw https://mirrors.zju.edu.cn https://mirrors.nju.edu.cn https://mirrors.ustc.edu.cn https://mirrors.tuna.tsinghua.edu.cn";;
+  *) echo 'Invalid /etc/claude-cage/debian-mirror: use auto, official, tw, tuna, zju, nju or ustc.' >&2; exit 1;;
 esac
 for repository in debian debian-security; do
   list="/etc/apt/mirrors/$repository.list"
@@ -43,13 +46,13 @@ for repository in debian debian-security; do
   [ "$repository" != debian-security ] || suite="$suite-security"
   priority=0
   # "auto" prefers the official CDN when it works through the guest's
-  # configured network and probes domestic mirrors only after it fails.
-  # "nju" and "ustc" put the mirror the host measured fastest first; an
-  # unreachable mirror is skipped and the official source stays last.
-  if [ "$preference" = nju ] || [ "$preference" = ustc ] || { [ "$preference" = auto ] && ! timeout 8 /usr/lib/apt/apt-helper -o Acquire::Retries=0 \
+  # configured network and probes mirrors only after it fails.
+  # Specific mirror IDs put that mirror first, followed by fallback mirrors
+  # and the official source last.
+  if [ "$preference" = tw ] || [ "$preference" = tuna ] || [ "$preference" = zju ] || [ "$preference" = nju ] || [ "$preference" = ustc ] || { [ "$preference" = auto ] && ! timeout 8 /usr/lib/apt/apt-helper -o Acquire::Retries=0 \
       -o Acquire::http::Timeout=5 -o Acquire::https::Timeout=5 \
       download-file "$official/dists/$suite/InRelease" "$probe" >/dev/null 2>&1; }; then
-    for origin in $domestic; do
+    for origin in $mirrors; do
       mirror="$origin/$repository"
       rm -f "$probe"
       if timeout 8 /usr/lib/apt/apt-helper -o Acquire::Retries=0 \

@@ -36,7 +36,13 @@ def security_mirrors():
         return []
     # Reuse only mirrors selected by the bounded reachability probe. Explicit
     # official preference and custom sources never cause hidden mirror requests.
-    allowed = ("https://mirrors.nju.edu.cn/debian-security/", "https://mirrors.ustc.edu.cn/debian-security/")
+    allowed = (
+        "https://mirrors.nju.edu.cn/debian-security/",
+        "https://mirrors.ustc.edu.cn/debian-security/",
+        "https://mirrors.zju.edu.cn/debian-security/",
+        "https://mirrors.tuna.tsinghua.edu.cn/debian-security/",
+        "https://debian.csie.ntu.edu.tw/debian-security/",
+    )
     return [parts[0].rstrip("/") + "/" for line in lines[1:]
             if (parts := line.split()) and parts[0].rstrip("/") + "/" in allowed]
 

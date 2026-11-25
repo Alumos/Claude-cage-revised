@@ -129,14 +129,52 @@ func TestCageDebianMirrors(t *testing.T) {
 				images = append(images, image)
 			}
 		}
-		if len(images) != 3 {
-			t.Fatalf("%s: expected two mirrors and one upstream, got %+v", arch, images)
+		if len(images) != len(debianImageMirrors) {
+			t.Fatalf("%s: expected %d image candidates, got %+v", arch, len(debianImageMirrors), images)
 		}
-		for i, base := range []string{"https://cloud.debian.org/images/cloud/", "https://mirrors.nju.edu.cn/debian-cdimage/cloud/", "https://mirrors.ustc.edu.cn/debian-cdimage/cloud/"} {
-			if !strings.HasPrefix(images[i].Location, base) || images[i].Digest != images[2].Digest || images[i].Digest.Validate() != nil {
+		for i, mirror := range debianImageMirrors {
+			if !strings.HasPrefix(images[i].Location, mirror.base) || images[i].Digest != images[0].Digest || images[i].Digest.Validate() != nil {
 				t.Fatalf("unexpected image or missing pin: %+v", images[i])
 			}
 		}
+	}
+}
+
+func TestCageDebianMirrorsPreferenceOrder(t *testing.T) {
+	pinned := []limatype.Image{{
+		Location: "https://cloud.debian.org/images/cloud/trixie/20260712-2537/debian-13-genericcloud-arm64-20260712-2537.qcow2",
+		Arch:     "aarch64",
+		Variant:  "genericcloud",
+		Digest:   "sha512:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+	}}
+	for _, tc := range []struct {
+		pref string
+		want []string
+	}{
+		{"official", []string{"https://cloud.debian.org/images/cloud/", "https://cdimage.debian.org/cdimage/cloud/"}},
+		{"zju", []string{"https://mirrors.zju.edu.cn/debian-cdimage/cloud/", "https://mirrors.nju.edu.cn/debian-cdimage/cloud/", "https://mirrors.ustc.edu.cn/debian-cdimage/cloud/", "https://cloud.debian.org/images/cloud/", "https://cdimage.debian.org/cdimage/cloud/"}},
+		{"ustc", []string{"https://mirrors.ustc.edu.cn/debian-cdimage/cloud/", "https://mirrors.nju.edu.cn/debian-cdimage/cloud/", "https://mirrors.zju.edu.cn/debian-cdimage/cloud/", "https://cloud.debian.org/images/cloud/", "https://cdimage.debian.org/cdimage/cloud/"}},
+		{"tuna", []string{"https://mirrors.nju.edu.cn/debian-cdimage/cloud/", "https://mirrors.ustc.edu.cn/debian-cdimage/cloud/", "https://mirrors.zju.edu.cn/debian-cdimage/cloud/", "https://cloud.debian.org/images/cloud/", "https://cdimage.debian.org/cdimage/cloud/"}},
+		{"tw", []string{"https://cdimage.debian.org/cdimage/cloud/", "https://cloud.debian.org/images/cloud/", "https://mirrors.zju.edu.cn/debian-cdimage/cloud/", "https://mirrors.nju.edu.cn/debian-cdimage/cloud/", "https://mirrors.ustc.edu.cn/debian-cdimage/cloud/"}},
+	} {
+		t.Run(tc.pref, func(t *testing.T) {
+			raw, err := cageDebianImagesFor(pinned, tc.pref)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var got []limatype.Image
+			if err := json.Unmarshal(raw, &got); err != nil {
+				t.Fatal(err)
+			}
+			if len(got) != len(tc.want) {
+				t.Fatalf("got %d images, want %d: %+v", len(got), len(tc.want), got)
+			}
+			for i, base := range tc.want {
+				if !strings.HasPrefix(got[i].Location, base) || got[i].Digest != pinned[0].Digest {
+					t.Fatalf("index %d: got %+v, want prefix %s", i, got[i], base)
+				}
+			}
+		})
 	}
 }
 

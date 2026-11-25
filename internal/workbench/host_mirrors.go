@@ -24,11 +24,14 @@ import (
 var debianMirrorCandidates = []struct{ ID, Name, URL string }{
 	{"nju", "南京大学镜像", "https://mirrors.nju.edu.cn/debian"},
 	{"ustc", "中国科学技术大学镜像", "https://mirrors.ustc.edu.cn/debian"},
+	{"zju", "浙江大学镜像", "https://mirrors.zju.edu.cn/debian"},
+	{"tuna", "清华大学镜像", "https://mirrors.tuna.tsinghua.edu.cn/debian"},
+	{"tw", "台湾大学镜像", "https://debian.csie.ntu.edu.tw/debian"},
 	{"official", "Debian 官方源（CDN）", "https://deb.debian.org/debian"},
 }
 
 const (
-	mirrorProbeBudget = 5 * time.Second
+	mirrorProbeBudget = 4 * time.Second
 	mirrorProbeBytes  = 4 << 20
 )
 

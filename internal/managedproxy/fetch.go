@@ -117,7 +117,7 @@ func BootstrapDNSURLs() []string {
 }
 
 func resolveInfrastructureWith(ctx context.Context, host string, client *http.Client, servers []string) (netip.Addr, error) {
-	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	q := new(dns.Msg)
 	q.SetQuestion(dns.Fqdn(host), dns.TypeA)
@@ -210,29 +210,93 @@ func Fetch(ctx context.Context, client *http.Client, rawURL string) ([]byte, str
 	return b, usage, nil
 }
 
-func fetchWithUserAgent(ctx context.Context, client *http.Client, targetURL, userAgent string) ([]byte, string, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", targetURL, nil)
-	if err != nil {
-		return nil, "", errors.New("订阅网址无效")
+func subscriptionFetchError(err error) (string, bool) {
+	if err == nil {
+		return "", false
 	}
-	req.Header.Set("User-Agent", userAgent)
-	res, err := client.Do(req)
-	if err != nil {
-		return nil, "", errors.New("订阅下载失败，请检查下载路径和服务地址")
+	msg := err.Error()
+	for _, permanent := range []string{
+		"订阅重定向被拒绝",
+		"订阅服务器必须使用公网地址",
+		"代理基础设施域名无效",
+	} {
+		if strings.Contains(msg, permanent) {
+			return permanent, false
+		}
 	}
+	const dnsUnavailable = "代理基础设施 DNS 均不可用或未返回公网 IPv4；请检查主机网络后重试，未使用系统 DNS 回退"
+	if strings.Contains(msg, dnsUnavailable) {
+		return dnsUnavailable, true
+	}
+	return "订阅下载失败，请检查下载路径和服务地址", true
+}
+
+func isRetryableSubscriptionStatus(code int) bool {
+	return code == http.StatusRequestTimeout || code == http.StatusTooManyRequests || (code >= 500 && code <= 599)
+}
+
+func waitSubscriptionRetry(ctx context.Context, delay time.Duration) bool {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
+	}
+}
+
+func readSubscriptionResponse(res *http.Response) ([]byte, string, bool, error) {
 	defer res.Body.Close()
-	if res.StatusCode != 200 {
-		return nil, "", errors.New("订阅服务器返回 HTTP " + strconv.Itoa(res.StatusCode))
+	if res.StatusCode != http.StatusOK {
+		_, _ = io.Copy(io.Discard, io.LimitReader(res.Body, 4096))
+		return nil, "", isRetryableSubscriptionStatus(res.StatusCode), errors.New("订阅服务器返回 HTTP " + strconv.Itoa(res.StatusCode))
 	}
 	b, err := io.ReadAll(io.LimitReader(res.Body, MaxImport+1))
-	if err != nil || len(b) > MaxImport {
-		return nil, "", errors.New("订阅下载中断或超过 8 MiB")
+	if len(b) > MaxImport {
+		return nil, "", false, errors.New("订阅下载中断或超过 8 MiB")
+	}
+	if err != nil {
+		return nil, "", true, errors.New("订阅下载中断或超过 8 MiB")
 	}
 	usage := "" // Keep only known numeric metadata; never echo arbitrary headers.
 	if raw := res.Header.Get("Subscription-Userinfo"); len(raw) < 300 {
 		usage = usageSummary(raw)
 	}
-	return b, usage, nil
+	return b, usage, false, nil
+}
+
+func fetchWithUserAgent(ctx context.Context, client *http.Client, targetURL, userAgent string) ([]byte, string, error) {
+	backoffs := []time.Duration{300 * time.Millisecond, 800 * time.Millisecond}
+	for attempt := 0; attempt <= len(backoffs); attempt++ {
+		req, err := http.NewRequestWithContext(ctx, "GET", targetURL, nil)
+		if err != nil {
+			return nil, "", errors.New("订阅网址无效")
+		}
+		req.Header.Set("User-Agent", userAgent)
+		res, err := client.Do(req)
+		if err != nil {
+			msg, retryable := subscriptionFetchError(err)
+			if !retryable || ctx.Err() != nil || attempt == len(backoffs) {
+				return nil, "", errors.New(msg)
+			}
+			if !waitSubscriptionRetry(ctx, backoffs[attempt]) {
+				return nil, "", errors.New(msg)
+			}
+			continue
+		}
+		b, usage, retryable, readErr := readSubscriptionResponse(res)
+		if readErr == nil {
+			return b, usage, nil
+		}
+		if !retryable || ctx.Err() != nil || attempt == len(backoffs) {
+			return nil, "", readErr
+		}
+		if !waitSubscriptionRetry(ctx, backoffs[attempt]) {
+			return nil, "", readErr
+		}
+	}
+	return nil, "", errors.New("订阅下载失败，请检查下载路径和服务地址")
 }
 
 func looksLikeClashSubscription(data []byte) bool {

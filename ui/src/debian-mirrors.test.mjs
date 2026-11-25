@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { beginInstall, formatSpeed } from "./debian-mirrors.mjs";
+import { beginInstall, formatSpeed, mirrorNames, mirrorOptions } from "./debian-mirrors.mjs";
 
 function fakeApi(responses) {
   const calls = [];
@@ -48,4 +48,14 @@ test("speeds are readable", () => {
   assert.equal(formatSpeed(0), "—");
   assert.equal(formatSpeed(58 * 1024), "58 KB/s");
   assert.equal(formatSpeed(3.5 * (1 << 20)), "3.5 MB/s");
+});
+
+test("mirror options cover all selectable sources with display names", () => {
+  assert.deepEqual(
+    mirrorOptions.map(([id]) => id),
+    ["auto", "tw", "tuna", "zju", "nju", "ustc", "official"],
+  );
+  for (const [id, label] of mirrorOptions) {
+    assert.equal(mirrorNames[id], label);
+  }
 });

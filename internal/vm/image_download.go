@@ -12,12 +12,45 @@ import (
 // response, so it stays readable after diagnostics redaction.
 const ImageDownloadMarker = "CAGE_IMAGE_DOWNLOAD_FAILED"
 
-// debianImageMirrors are the locations cageDebianImages offers, in order, and
-// the code each has in ImageDownloadMarker.
+// debianImageMirrors are the verified HTTPS cloud-image locations
+// cageDebianImages offers and the code each has in ImageDownloadMarker.
 var debianImageMirrors = []struct{ base, code string }{
 	{"https://cloud.debian.org/images/cloud/", "official"},
 	{"https://mirrors.nju.edu.cn/debian-cdimage/cloud/", "nju"},
 	{"https://mirrors.ustc.edu.cn/debian-cdimage/cloud/", "ustc"},
+	{"https://mirrors.zju.edu.cn/debian-cdimage/cloud/", "zju"},
+	{"https://cdimage.debian.org/cdimage/cloud/", "cdimage"},
+}
+
+func orderedDebianImageMirrors(preference string) []struct{ base, code string } {
+	byCode := map[string]struct{ base, code string }{}
+	for _, mirror := range debianImageMirrors {
+		byCode[mirror.code] = mirror
+	}
+	var order []string
+	switch preference {
+	case "official":
+		order = []string{"official", "cdimage"}
+	case "nju":
+		order = []string{"nju", "ustc", "zju", "official", "cdimage"}
+	case "ustc":
+		order = []string{"ustc", "nju", "zju", "official", "cdimage"}
+	case "zju":
+		order = []string{"zju", "nju", "ustc", "official", "cdimage"}
+	case "tuna":
+		order = []string{"nju", "ustc", "zju", "official", "cdimage"}
+	case "tw":
+		order = []string{"cdimage", "official", "zju", "nju", "ustc"}
+	default:
+		return debianImageMirrors
+	}
+	mirrors := make([]struct{ base, code string }, 0, len(order))
+	for _, code := range order {
+		if mirror, ok := byCode[code]; ok {
+			mirrors = append(mirrors, mirror)
+		}
+	}
+	return mirrors
 }
 
 // fileutils.DownloadFile reports each candidate as "failed to download

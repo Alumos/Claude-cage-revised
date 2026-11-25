@@ -3,12 +3,14 @@ package managedproxy
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"reflect"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"go.yaml.in/yaml/v3"
@@ -223,6 +225,55 @@ func TestFetchMeowXUserAgentAndFallback(t *testing.T) {
 		}
 		if nodes, err := Parse(data, "sub"); err != nil || len(nodes) != 1 || nodes[0].Type != "anytls" {
 			t.Fatalf("parse base64 sharelink: nodes=%+v err=%v", nodes, err)
+		}
+	})
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+func TestFetchRetriesTransientFailuresAndStopsOnPermanentError(t *testing.T) {
+	t.Run("retries-503-then-succeeds", func(t *testing.T) {
+		var calls atomic.Int32
+		body := "proxies:\n  - {name: m, type: miu, server: example.com, port: 443, psk: \"0123456789abcdef\"}\n"
+		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if calls.Add(1) < 3 {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				return
+			}
+			io.WriteString(w, body)
+		}))
+		defer server.Close()
+		data, _, err := Fetch(context.Background(), server.Client(), server.URL)
+		if err != nil || string(data) != body || calls.Load() != 3 {
+			t.Fatalf("transient retry failed: calls=%d data=%q err=%v", calls.Load(), data, err)
+		}
+	})
+
+	t.Run("does-not-retry-404", func(t *testing.T) {
+		var calls atomic.Int32
+		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			calls.Add(1)
+			w.WriteHeader(http.StatusNotFound)
+		}))
+		defer server.Close()
+		_, _, err := Fetch(context.Background(), server.Client(), server.URL)
+		if err == nil || !strings.Contains(err.Error(), "HTTP 404") || calls.Load() != 1 {
+			t.Fatalf("permanent 404 retried or wrong error: calls=%d err=%v", calls.Load(), err)
+		}
+	})
+
+	t.Run("preserves-doh-failure-message", func(t *testing.T) {
+		var calls atomic.Int32
+		want := "代理基础设施 DNS 均不可用或未返回公网 IPv4；请检查主机网络后重试，未使用系统 DNS 回退"
+		client := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+			calls.Add(1)
+			return nil, errors.New(want)
+		})}
+		_, _, err := Fetch(context.Background(), client, "https://example.com/sub")
+		if err == nil || err.Error() != want || calls.Load() != 3 {
+			t.Fatalf("DoH failure handling: calls=%d err=%v", calls.Load(), err)
 		}
 	})
 }
