@@ -2,11 +2,16 @@ name: Build multi-platform packages (MeowX core)
 on:
   push:
     tags:
-      - 'revised-*'
+      - 'build-revised-*'
   workflow_dispatch:
     inputs:
       from_ci_run_id:
         description: Optional completed CI run ID to reuse its 4-platform artifacts without rebuilding
+        type: string
+        required: false
+        default: ''
+      from_package_run_id:
+        description: Optional completed revised-packages run ID to publish its already-assembled bundle
         type: string
         required: false
         default: ''
@@ -37,7 +42,8 @@ on:
         default: ''
 
 permissions:
-  contents: read
+  contents: write
+  actions: read
 
 concurrency:
   group: revised-packages-${{ github.ref }}
@@ -45,6 +51,7 @@ concurrency:
 
 jobs:
   preflight:
+    if: ${{ inputs.from_package_run_id == '' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -63,7 +70,7 @@ jobs:
 
   macos-arm64:
     needs: preflight
-    if: ${{ inputs.from_ci_run_id == '' && (github.event_name == 'push' || inputs.build_macos_arm64) }}
+    if: ${{ inputs.from_package_run_id == '' && inputs.from_ci_run_id == '' && (github.event_name == 'push' || inputs.build_macos_arm64) }}
     uses: ./.github/workflows/macos-build.yml
     with:
       ref: ${{ github.sha }}
@@ -72,7 +79,7 @@ jobs:
 
   macos-amd64:
     needs: preflight
-    if: ${{ inputs.from_ci_run_id == '' && (github.event_name == 'push' || inputs.build_macos_amd64) }}
+    if: ${{ inputs.from_package_run_id == '' && inputs.from_ci_run_id == '' && (github.event_name == 'push' || inputs.build_macos_amd64) }}
     uses: ./.github/workflows/macos-intel-build.yml
     with:
       ref: ${{ github.sha }}
@@ -81,7 +88,7 @@ jobs:
 
   linux-amd64:
     needs: preflight
-    if: ${{ inputs.from_ci_run_id == '' && (github.event_name == 'push' || inputs.build_linux_amd64) }}
+    if: ${{ inputs.from_package_run_id == '' && inputs.from_ci_run_id == '' && (github.event_name == 'push' || inputs.build_linux_amd64) }}
     uses: ./.github/workflows/linux-build.yml
     with:
       ref: ${{ github.sha }}
@@ -90,7 +97,7 @@ jobs:
 
   windows-amd64:
     needs: preflight
-    if: ${{ inputs.from_ci_run_id == '' && (github.event_name == 'push' || inputs.build_windows_amd64) }}
+    if: ${{ inputs.from_package_run_id == '' && inputs.from_ci_run_id == '' && (github.event_name == 'push' || inputs.build_windows_amd64) }}
     uses: ./.github/workflows/windows-build.yml
     with:
       ref: ${{ github.sha }}
@@ -107,6 +114,7 @@ jobs:
       - windows-amd64
     if: >-
       ${{ always() &&
+          inputs.from_package_run_id == '' &&
           needs.preflight.result == 'success' &&
           (needs.macos-arm64.result == 'success' || needs.macos-arm64.result == 'skipped') &&
           (needs.macos-amd64.result == 'success' || needs.macos-amd64.result == 'skipped') &&
@@ -116,8 +124,10 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 30
     permissions:
-      contents: write
+      contents: read
       actions: read
+    outputs:
+      source_sha: ${{ steps.ci_run.outputs.source_sha || github.sha }}
     defaults:
       run:
         shell: bash
@@ -256,15 +266,45 @@ jobs:
           overwrite: true
           compression-level: 0
           retention-days: 30
-      - name: Publish GitHub Release
-        if: ${{ (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/revised-')) || inputs.publish_release }}
+
+  publish:
+    needs: assemble
+    if: >-
+      ${{ always() &&
+          (inputs.from_package_run_id != '' || needs.assemble.result == 'success') &&
+          ((github.event_name == 'push' && startsWith(github.ref, 'refs/tags/build-revised-')) || inputs.publish_release) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Download assembled bundle from current run
+        if: ${{ inputs.from_package_run_id == '' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: claude-cage-revised-packages
+          path: _output/revised-release
+      - name: Download assembled bundle from previous package run
+        if: ${{ inputs.from_package_run_id != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.from_package_run_id }}
+          name: claude-cage-revised-packages
+          path: _output/revised-release
+      - name: Upload assets to GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
           EVENT_NAME: ${{ github.event_name }}
           REF_NAME: ${{ github.ref_name }}
           INPUT_TAG: ${{ inputs.release_tag }}
           CI_RUN_ID: ${{ inputs.from_ci_run_id }}
-          BUILD_SHA: ${{ steps.ci_run.outputs.source_sha || github.sha }}
+          BUILD_SHA: ${{ needs.assemble.outputs.source_sha || github.sha }}
         run: |
           set -euo pipefail
           version="$(tr -d '\r\n' < VERSION)"
@@ -286,14 +326,16 @@ jobs:
           if [[ -n "$CI_RUN_ID" ]]; then
             notes="${notes} Assembled from verified CI run #${CI_RUN_ID}."
           fi
-          if gh release view "$tag" >/dev/null 2>&1; then
-            gh release upload "$tag" "${assets[@]}" --clobber
+          if gh release view "$tag" --repo "$REPO" >/dev/null 2>&1; then
+            gh release upload "$tag" "${assets[@]}" --repo "$REPO" --clobber
           elif [[ "$EVENT_NAME" == push ]]; then
             gh release create "$tag" "${assets[@]}" \
+              --repo "$REPO" \
               --title "Claude Cage Revised ($tag)" \
               --notes "$notes"
           else
             gh release create "$tag" "${assets[@]}" \
+              --repo "$REPO" \
               --target "$BUILD_SHA" \
               --title "Claude Cage Revised ($tag)" \
               --notes "$notes"
