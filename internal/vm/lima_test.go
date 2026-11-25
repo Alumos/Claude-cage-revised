@@ -142,10 +142,12 @@ func TestCageDebianMirrors(t *testing.T) {
 
 func TestCageDebianMirrorsPreferenceOrder(t *testing.T) {
 	pinned := []limatype.Image{{
-		Location: "https://cloud.debian.org/images/cloud/trixie/20260712-2537/debian-13-genericcloud-arm64-20260712-2537.qcow2",
-		Arch:     "aarch64",
-		Variant:  "genericcloud",
-		Digest:   "sha512:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		File: limatype.File{
+			Location: "https://cloud.debian.org/images/cloud/trixie/20260712-2537/debian-13-genericcloud-arm64-20260712-2537.qcow2",
+			Arch:     "aarch64",
+			Digest:   "sha512:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		},
+		Variant: "genericcloud",
 	}}
 	for _, tc := range []struct {
 		pref string
