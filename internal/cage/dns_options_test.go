@@ -1,6 +1,7 @@
 package cage
 
 import (
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"io"
@@ -78,6 +79,52 @@ func TestDNSFailsOverToBackupEndpointThroughProxy(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "/dns-query") || strings.Contains(err.Error(), primary.URL) {
 		t.Fatalf("error leaked an endpoint path: %v", err)
+	}
+}
+
+func TestDNSFailsOverWithinGuestWindowWhenPrimaryTimesOut(t *testing.T) {
+	var primaryHits, backupHits atomic.Int32
+	var backupDown atomic.Bool
+	release := make(chan struct{})
+	primary := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		primaryHits.Add(1)
+		select {
+		case <-r.Context().Done():
+		case <-release:
+		}
+	}))
+	t.Cleanup(func() {
+		close(release)
+		primary.Close()
+	})
+	backup := dohServer(t, &backupDown, &backupHits)
+	p, connects := testProxy(t)
+	c := DefaultConfig()
+	c.ProxyURL, c.DNSURL = p.URL, primary.URL
+	c.DNS = NewDNSOptions([]string{backup.URL}, nil, false)
+	e, err := NewEgress(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer e.client.CloseIdleConnections()
+	pool := primary.Client().Transport.(*http.Transport).TLSClientConfig.RootCAs.Clone()
+	pool.AddCert(backup.Certificate())
+	e.client.Transport.(*http.Transport).TLSClientConfig = &tls.Config{RootCAs: pool}
+
+	// Simulate the guest's 5-second UDP resolver timeout: a silently
+	// blackholed primary must time out early enough for failover to succeed.
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	q := new(dns.Msg).SetQuestion("deb.debian.org.", dns.TypeA)
+	if _, err := e.ExchangeDNS(ctx, q); err != nil {
+		t.Fatalf("failover did not complete within 5s guest window: %v", err)
+	}
+	if primaryHits.Load() != 1 || backupHits.Load() != 1 || connects.Load() == 0 {
+		t.Fatalf("unexpected failover counts: primary=%d backup=%d connects=%d", primaryHits.Load(), backupHits.Load(), connects.Load())
+	}
+	// Subsequent queries stay on the healthy backup without waiting on primary.
+	if _, err := e.ExchangeDNS(t.Context(), q); err != nil || primaryHits.Load() != 1 || backupHits.Load() != 2 {
+		t.Fatalf("backup not preferred after timeout failover: err=%v primary=%d backup=%d", err, primaryHits.Load(), backupHits.Load())
 	}
 }
 
