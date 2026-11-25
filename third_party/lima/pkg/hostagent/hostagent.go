@@ -1343,12 +1343,20 @@ exit 1
 func (a *HostAgent) probeCloudInitCompleted(ctx context.Context) bool {
 	probeCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
+	return a.cloudInitCommand(probeCtx, cloudInitCompletedProbeScript(a.iid)).Run() == nil
+}
+
+func (a *HostAgent) cloudInitCommand(ctx context.Context, script string) *exec.Cmd {
 	sshAddress, sshPort := a.sshAddressPort()
 	args := a.sshConfig.Args()
+	if runtime.GOOS == "windows" {
+		// Windows SSH clients need a separate session for piped guest commands.
+		args = sshutil.DisableControlMasterOptsFromSSHArgs(args)
+	}
 	args = append(args, "-T", "-p", strconv.Itoa(sshPort), sshAddress, "sh", "-s")
-	cmd := exec.CommandContext(probeCtx, a.sshConfig.Binary(), args...)
-	cmd.Stdin = strings.NewReader(cloudInitCompletedProbeScript(a.iid))
-	return cmd.Run() == nil
+	cmd := exec.CommandContext(ctx, a.sshConfig.Binary(), args...)
+	cmd.Stdin = strings.NewReader(script)
+	return cmd
 }
 
 // cloudInitStream runs one command that follows the guest's cloud-init log
@@ -1357,14 +1365,9 @@ func (a *HostAgent) probeCloudInitCompleted(ctx context.Context) bool {
 type cloudInitStream func(ctx context.Context, read func(io.Reader)) error
 
 func (a *HostAgent) streamCloudInitLog(ctx context.Context, read func(io.Reader)) error {
-	sshAddress, sshPort := a.sshAddressPort()
-	args := a.sshConfig.Args()
-	args = append(args, "-T", "-p", strconv.Itoa(sshPort), sshAddress, "sh", "-s")
-
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, a.sshConfig.Binary(), args...)
-	cmd.Stdin = strings.NewReader(cloudInitLogStreamScript)
+	cmd := a.cloudInitCommand(ctx, cloudInitLogStreamScript)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return fmt.Errorf("failed to create stdout pipe for cloud-init monitoring: %w", err)
